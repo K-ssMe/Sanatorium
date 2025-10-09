@@ -56,6 +56,9 @@ import {
   Edit,
   Trash2,
   Database,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import {
   Dialog,
@@ -63,6 +66,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 
 export default function BookingSystem() {
   const [selectedFloor, setSelectedFloor] = useState(1);
@@ -133,6 +142,12 @@ export default function BookingSystem() {
   const [guestSearchTerm, setGuestSearchTerm] = useState("");
   const [organizationSearchTerm, setOrganizationSearchTerm] = useState("");
   const [bookingSearchTerm, setBookingSearchTerm] = useState("");
+  const [bookingCheckInDateFilter, setBookingCheckInDateFilter] =
+    useState<Date | null>(null);
+  const [bookingSortField, setBookingSortField] = useState<string | null>(null);
+  const [bookingSortDirection, setBookingSortDirection] = useState<
+    "asc" | "desc"
+  >("asc");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [roomsData, setRoomsData] = useState(() => {
@@ -167,7 +182,38 @@ export default function BookingSystem() {
   });
   const [auditHistory, setAuditHistory] = useState<
     { date: Date; bookings: Booking[]; rooms: Room[] }[]
-  >([]);
+  >(() => {
+    const saved = localStorage.getItem("sanatorium_auditHistory");
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        return parsed.map((audit: any) => ({
+          ...audit,
+          date: new Date(audit.date),
+          bookings: audit.bookings.map((b: any) => ({
+            ...b,
+            checkInDate: new Date(b.checkInDate),
+            checkOutDate: new Date(b.checkOutDate),
+            createdAt: new Date(b.createdAt),
+            actualCheckInAt: b.actualCheckInAt
+              ? new Date(b.actualCheckInAt)
+              : undefined,
+            actualCheckOutAt: b.actualCheckOutAt
+              ? new Date(b.actualCheckOutAt)
+              : undefined,
+          })),
+          rooms: audit.rooms.map((r: any) => ({
+            ...r,
+            blockedAt: r.blockedAt ? new Date(r.blockedAt) : undefined,
+          })),
+        }));
+      } catch (e) {
+        console.error("Error loading audit history:", e);
+        return [];
+      }
+    }
+    return [];
+  });
   const [isBookingDialogOpen, setIsBookingDialogOpen] = useState(false);
   const [selectedBookingId, setSelectedBookingId] = useState<string | null>(
     null,
@@ -518,14 +564,18 @@ export default function BookingSystem() {
     let confirmedToBooked = 0;
 
     // Save current state to history
-    setAuditHistory((prev) => [
-      ...prev,
-      {
-        date: new Date(today),
-        bookings: [...bookings],
-        rooms: [...roomsData],
-      },
-    ]);
+    setAuditHistory((prev) => {
+      const updated = [
+        ...prev,
+        {
+          date: new Date(today),
+          bookings: [...bookings],
+          rooms: [...roomsData],
+        },
+      ];
+      localStorage.setItem("sanatorium_auditHistory", JSON.stringify(updated));
+      return updated;
+    });
 
     // Process bookings according to nightly audit rules
     const updatedBookings = bookings.map((booking) => {
@@ -589,29 +639,74 @@ export default function BookingSystem() {
     localStorage.setItem("sanatorium_currentDate", nextDay.toISOString());
 
     // Generate night audit report
+    let totalBeds = 0;
+    let freeBeds = 0;
+    let occupiedBeds = 0;
+    let bookedBeds = 0;
+    let availableRooms = 0;
+    let occupiedRooms = 0;
+    let bookedRooms = 0;
+    let blockedRooms = 0;
+
+    roomsData.forEach((room) => {
+      totalBeds += room.capacity;
+      const status = computeRoomStatus(room, today, updatedBookings);
+
+      // Count current occupancy for this room
+      const roomOccupancy = updatedBookings.filter(
+        (b) =>
+          b.roomId === room.id &&
+          (b.status === "checked_in" || b.status === "booked") &&
+          b.checkInDate <= today &&
+          b.checkOutDate >= today,
+      ).length;
+
+      switch (status) {
+        case "free":
+          availableRooms++;
+          freeBeds += room.capacity;
+          break;
+        case "occupied":
+          occupiedRooms++;
+          occupiedBeds += roomOccupancy;
+          freeBeds += room.capacity - roomOccupancy;
+          break;
+        case "booked":
+          bookedRooms++;
+          bookedBeds += roomOccupancy;
+          freeBeds += room.capacity - roomOccupancy;
+          break;
+        case "blocked":
+          blockedRooms++;
+          break;
+      }
+    });
+
     const auditData = {
       date: currentDate.toLocaleDateString("ru-RU"),
       nextDate: nextDay.toLocaleDateString("ru-RU"),
       totalRooms: roomsData.length,
-      availableRooms: roomsData.filter((r) => r.status === "available").length,
-      occupiedRooms: roomsData.filter((r) => r.status === "occupied").length,
-      bookedRooms: roomsData.filter((r) => r.status === "booked").length,
-      blockedRooms: roomsData.filter((r) => r.status === "blocked").length,
-      activeBookings: bookings.filter(
-        (b) => b.status === "active" || b.status === "checked_in",
+      totalBeds,
+      availableRooms,
+      freeBeds,
+      occupiedRooms,
+      occupiedBeds,
+      bookedRooms,
+      bookedBeds,
+      blockedRooms,
+      activeBookings: updatedBookings.filter(
+        (b) => b.status === "checked_in" || b.status === "booked",
       ).length,
-      checkInsToday: bookings.filter(
+      checkInsToday: updatedBookings.filter(
         (b) =>
           b.checkInDate.toDateString() === currentDate.toDateString() &&
-          (b.status === "active" || b.status === "checked_in"),
+          (b.status === "checked_in" || b.status === "booked"),
       ).length,
-      checkOutsToday: bookings.filter(
+      checkOutsToday: updatedBookings.filter(
         (b) =>
           b.checkOutDate.toDateString() === currentDate.toDateString() &&
-          (b.status === "active" || b.status === "checked_in"),
+          (b.status === "checked_in" || b.status === "booked"),
       ).length,
-      totalGuests: guests.length,
-      totalRevenue: bookings.reduce((sum, b) => sum + (b.totalAmount || 0), 0),
     };
 
     // Generate and print night audit report
@@ -654,19 +749,19 @@ export default function BookingSystem() {
             <h2>ОБЩАЯ СТАТИСТИКА</h2>
             <div class="stats-grid">
               <div class="stat-card">
-                <div class="stat-number">${auditData.totalRooms}</div>
-                <div class="stat-label">Всего номеров</div>
+                <div class="stat-number">${auditData.totalRooms}/${auditData.totalBeds}</div>
+                <div class="stat-label">Всего номеров/мест</div>
               </div>
               <div class="stat-card">
-                <div class="stat-number">${auditData.availableRooms}</div>
+                <div class="stat-number">${auditData.availableRooms}/${auditData.freeBeds}</div>
                 <div class="stat-label">Свободно</div>
               </div>
               <div class="stat-card">
-                <div class="stat-number">${auditData.occupiedRooms}</div>
+                <div class="stat-number">${auditData.occupiedRooms}/${auditData.occupiedBeds}</div>
                 <div class="stat-label">Занято</div>
               </div>
               <div class="stat-card">
-                <div class="stat-number">${auditData.bookedRooms}</div>
+                <div class="stat-number">${auditData.bookedRooms}/${auditData.bookedBeds}</div>
                 <div class="stat-label">Забронировано</div>
               </div>
             </div>
@@ -695,11 +790,7 @@ export default function BookingSystem() {
                 <td>${auditData.activeBookings}</td>
                 <td>Текущие активные брони</td>
               </tr>
-              <tr>
-                <td>Всего гостей в базе</td>
-                <td>${auditData.totalGuests}</td>
-                <td>Общее количество гостей</td>
-              </tr>
+
             </table>
           </div>
 
@@ -736,7 +827,6 @@ export default function BookingSystem() {
           <div class="summary">
             <h2>ИТОГИ ДНЯ</h2>
             <p><strong>Загруженность:</strong> ${Math.round(((auditData.occupiedRooms + auditData.bookedRooms) / auditData.totalRooms) * 100)}%</p>
-            <p><strong>Общее количество гостей:</strong> ${auditData.totalGuests}</p>
             <p><strong>Статус системы:</strong> Все операции завершены успешно</p>
             <p><strong>Следующий аудит:</strong> ${auditData.nextDate} в 00:00</p>
           </div>
@@ -1077,6 +1167,24 @@ export default function BookingSystem() {
     if (selectedGuest?.id === updatedGuest.id) {
       setSelectedGuest(updatedGuest);
     }
+    // Update guest information in all bookings
+    setBookings((prevBookings) => {
+      const updated = prevBookings.map((booking) =>
+        booking.guestId === updatedGuest.id
+          ? {
+              ...booking,
+              guestName: updatedGuest.fullName,
+              guestPhone: updatedGuest.phone,
+              guestAge: updatedGuest.age,
+              guestAddress: updatedGuest.address,
+              guestGender: updatedGuest.gender,
+              guestPassport: updatedGuest.passportNumber,
+            }
+          : booking,
+      );
+      localStorage.setItem("sanatorium_bookings", JSON.stringify(updated));
+      return updated;
+    });
   };
 
   const handleAddNewGuest = () => {
@@ -1212,43 +1320,155 @@ export default function BookingSystem() {
     .sort((a, b) => a.officialName.localeCompare(b.officialName));
 
   // Filter bookings
-  const filteredBookings = bookings
-    .filter((booking) => {
-      if (bookingSearchTerm === "") return true;
+  const filteredBookings = useMemo(() => {
+    let filtered = bookings.filter((booking) => {
+      // Text search filter
+      if (bookingSearchTerm !== "") {
+        const searchLower = bookingSearchTerm.toLowerCase();
+        const room = roomsData.find((r) => r.id === booking.roomId);
+        const matchesSearch =
+          booking.guestName.toLowerCase().includes(searchLower) ||
+          booking.guestPhone.includes(bookingSearchTerm) ||
+          (room && room.number.toLowerCase().includes(searchLower)) ||
+          (booking.voucherNumber &&
+            booking.voucherNumber.toLowerCase().includes(searchLower)) ||
+          booking.id.toLowerCase().includes(searchLower);
+        if (!matchesSearch) return false;
+      }
 
-      const searchLower = bookingSearchTerm.toLowerCase();
-      const room = roomsData.find((r) => r.id === booking.roomId);
+      // Check-in date filter
+      if (bookingCheckInDateFilter) {
+        const filterDate = new Date(bookingCheckInDateFilter);
+        filterDate.setHours(0, 0, 0, 0);
+        const bookingCheckIn = new Date(booking.checkInDate);
+        bookingCheckIn.setHours(0, 0, 0, 0);
+        if (bookingCheckIn.getTime() !== filterDate.getTime()) return false;
+      }
 
+      return true;
+    });
+
+    // Check if there are un-checked-in bookings after night audit
+    const today = new Date(currentDate);
+    today.setHours(0, 0, 0, 0);
+    const uncheckedInBookings = filtered.filter((b) => {
+      const checkInDate = new Date(b.checkInDate);
+      checkInDate.setHours(0, 0, 0, 0);
       return (
-        booking.guestName.toLowerCase().includes(searchLower) ||
-        booking.guestPhone.includes(bookingSearchTerm) ||
-        (room && room.number.toLowerCase().includes(searchLower)) ||
-        (booking.voucherNumber &&
-          booking.voucherNumber.toLowerCase().includes(searchLower)) ||
-        booking.id.toLowerCase().includes(searchLower)
+        (b.status === "booked" || b.status === "confirmed") &&
+        checkInDate < today
       );
-    })
-    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    });
 
-  // Compute room statistics based on current date and bookings
-  const stats = useMemo(() => {
+    // Sort bookings
+    if (bookingSortField) {
+      filtered.sort((a, b) => {
+        let aValue: any;
+        let bValue: any;
+
+        switch (bookingSortField) {
+          case "room":
+            const roomA = roomsData.find((r) => r.id === a.roomId);
+            const roomB = roomsData.find((r) => r.id === b.roomId);
+            aValue = roomA?.number || "";
+            bValue = roomB?.number || "";
+            break;
+          case "guest":
+            aValue = a.guestName;
+            bValue = b.guestName;
+            break;
+          case "checkIn":
+            aValue = a.checkInDate.getTime();
+            bValue = b.checkInDate.getTime();
+            break;
+          case "checkOut":
+            aValue = a.checkOutDate.getTime();
+            bValue = b.checkOutDate.getTime();
+            break;
+          case "status":
+            aValue = a.status;
+            bValue = b.status;
+            break;
+          case "voucher":
+            aValue = a.voucherNumber || "";
+            bValue = b.voucherNumber || "";
+            break;
+          default:
+            return 0;
+        }
+
+        if (typeof aValue === "string") {
+          const comparison = aValue.localeCompare(bValue);
+          return bookingSortDirection === "asc" ? comparison : -comparison;
+        } else {
+          return bookingSortDirection === "asc"
+            ? aValue - bValue
+            : bValue - aValue;
+        }
+      });
+    } else {
+      // Default sort: un-checked-in bookings first (highlighted), then by creation date
+      filtered.sort((a, b) => {
+        const aIsUncheckedIn = uncheckedInBookings.some((ub) => ub.id === a.id);
+        const bIsUncheckedIn = uncheckedInBookings.some((ub) => ub.id === b.id);
+
+        if (aIsUncheckedIn && !bIsUncheckedIn) return -1;
+        if (!aIsUncheckedIn && bIsUncheckedIn) return 1;
+
+        return b.createdAt.getTime() - a.createdAt.getTime();
+      });
+    }
+
+    return filtered;
+  }, [
+    bookings,
+    bookingSearchTerm,
+    bookingCheckInDateFilter,
+    bookingSortField,
+    bookingSortDirection,
+    roomsData,
+    currentDate,
+  ]);
+
+  // Compute room statistics based on report date (for reports tab) or current date
+  const getStatsForDate = (date: Date) => {
     const total = roomsData.length;
     let free = 0;
     let occupied = 0;
     let booked = 0;
     let blocked = 0;
+    let freeBeds = 0;
+    let occupiedBeds = 0;
+    let bookedBeds = 0;
+    let totalBeds = 0;
 
     roomsData.forEach((room) => {
-      const status = computeRoomStatus(room, currentDate, bookings);
+      totalBeds += room.capacity;
+      const status = computeRoomStatus(room, date, bookings);
+
+      // Count current occupancy for this room
+      const roomOccupancy = bookings.filter(
+        (b) =>
+          b.roomId === room.id &&
+          (b.status === "checked_in" || b.status === "booked") &&
+          b.checkInDate <= date &&
+          b.checkOutDate >= date,
+      ).length;
+
       switch (status) {
         case "free":
           free++;
+          freeBeds += room.capacity;
           break;
         case "occupied":
           occupied++;
+          occupiedBeds += roomOccupancy;
+          freeBeds += room.capacity - roomOccupancy;
           break;
         case "booked":
           booked++;
+          bookedBeds += roomOccupancy;
+          freeBeds += room.capacity - roomOccupancy;
           break;
         case "blocked":
           blocked++;
@@ -1275,11 +1495,27 @@ export default function BookingSystem() {
       occupied,
       booked,
       blocked,
+      freeBeds,
+      occupiedBeds,
+      bookedBeds,
+      totalBeds,
       buildingA: buildingA.length,
       buildingB: buildingB.length,
       checkedInGuests,
     };
-  }, [roomsData, bookings, currentDate]);
+  };
+
+  // Compute room statistics based on current date and bookings
+  const stats = useMemo(
+    () => getStatsForDate(currentDate),
+    [roomsData, bookings, currentDate],
+  );
+
+  // Compute stats for report date
+  const reportStats = useMemo(() => {
+    const reportDate = new Date(reportDateFrom);
+    return getStatsForDate(reportDate);
+  }, [roomsData, bookings, reportDateFrom]);
 
   const handleExportReport = (
     reportType: "occupancy" | "guests" | "status_by_date",
@@ -1319,11 +1555,12 @@ export default function BookingSystem() {
         );
       }
       if (filters.dateRange) {
-        // Filter bookings by date range
+        // Filter bookings by date range - show bookings that overlap with the range
+        const startDate = filters.dateRange.start;
+        const endDate = filters.dateRange.end;
         filteredBookingsForReport = bookings.filter(
           (booking) =>
-            booking.checkInDate >= filters.dateRange.start &&
-            booking.checkOutDate <= filters.dateRange.end,
+            booking.checkInDate <= endDate && booking.checkOutDate >= startDate,
         );
       }
     }
@@ -1518,6 +1755,27 @@ export default function BookingSystem() {
                 .join("")}
             </tbody>
           </table>
+          <div style="margin-top: 30px; padding: 20px; background-color: #f8f9fa; border-radius: 5px;">
+            <h3 style="margin-bottom: 15px; color: #333;">ИТОГО</h3>
+            <table style="width: 100%; border-collapse: collapse;">
+              <tr>
+                <td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">Итого по заселенным номерам:</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">${data.filter((row) => row["Статус"] === "Занят").length}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">Итого по заселенным гостям:</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">${data.filter((row) => row["Статус"] === "Занят").reduce((sum, row) => sum + (row["Текущая заполненность"] || 0), 0)}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">Итого по забронированным номерам:</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">${data.filter((row) => row["Статус"] === "Забронирован").length}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">Итого по забронированным гостям:</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">${data.filter((row) => row["Статус"] === "Забронирован").reduce((sum, row) => sum + (row["Текущая заполненность"] || 0), 0)}</td>
+              </tr>
+            </table>
+          </div>
         </body>
       </html>
     `;
@@ -1577,6 +1835,35 @@ export default function BookingSystem() {
                 .join("")}
             </tbody>
           </table>
+          <div style="margin-top: 30px; padding: 20px; background-color: #f8f9fa; border-radius: 5px;">
+            <h3 style="margin-bottom: 15px; color: #333;">ИТОГО</h3>
+            <table style="width: 100%; border-collapse: collapse;">
+              <tr>
+                <td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">Всего номеров:</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">${data.length}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">Всего гостей:</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">${reportType === "occupancy" ? data.reduce((sum, row) => sum + (row["Текущая заполненность"] || 0), 0) : reportType === "guests" ? data.length : data.filter((row) => row["Гость"] && row["Гость"] !== "").length}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">Итого по заселенным номерам:</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">${reportType === "guests" ? 0 : data.filter((row) => row["Статус"] === "Заселен" || row["Статус"] === "Занят").length}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">Итого по заселенным гостям:</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">${reportType === "guests" ? 0 : data.filter((row) => row["Статус"] === "Заселен" || row["Статус"] === "Занят").reduce((sum, row) => sum + (row["Текущая заполненность"] || row["Заполненность"]?.split("/")[0] || 0), 0)}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">Итого по забронированным номерам:</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">${reportType === "guests" ? 0 : data.filter((row) => row["Статус"] === "Забронирован").length}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">Итого по забронированным гостям:</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">${reportType === "guests" ? 0 : data.filter((row) => row["Статус"] === "Забронирован").reduce((sum, row) => sum + (row["Текущая заполненность"] || row["Заполненность"]?.split("/")[0] || 0), 0)}</td>
+              </tr>
+            </table>
+          </div>
         </body>
       </html>
     `;
@@ -3106,6 +3393,61 @@ export default function BookingSystem() {
     );
   };
 
+  // Audit Calendar Popup Component
+  const AuditCalendarPopup = ({
+    auditHistory,
+    onSelectDate,
+  }: {
+    auditHistory: { date: Date; bookings: Booking[]; rooms: Room[] }[];
+    onSelectDate: (
+      audit: { date: Date; bookings: Booking[]; rooms: Room[] },
+      index: number,
+    ) => void;
+  }) => {
+    const [isOpen, setIsOpen] = useState(false);
+
+    return (
+      <div className="relative">
+        <Button
+          variant="outline"
+          onClick={() => setIsOpen(!isOpen)}
+          className="border-indigo-300 text-indigo-700 hover:bg-indigo-50"
+        >
+          <Calendar className="w-4 h-4 mr-2" />
+          Выбрать дату
+        </Button>
+        {isOpen && (
+          <div className="absolute top-full mt-2 right-0 z-50 bg-white border border-gray-200 rounded-lg shadow-lg p-4">
+            <div className="mb-2 text-sm font-medium text-gray-700">
+              Выберите дату для возврата
+            </div>
+            <div className="max-h-60 overflow-y-auto space-y-2">
+              {auditHistory.map((audit, index) => (
+                <Button
+                  key={index}
+                  variant="outline"
+                  size="sm"
+                  className="w-full justify-start"
+                  onClick={() => {
+                    onSelectDate(audit, index);
+                    setIsOpen(false);
+                  }}
+                >
+                  {audit.date.toLocaleDateString("ru-RU", {
+                    weekday: "short",
+                    year: "numeric",
+                    month: "short",
+                    day: "numeric",
+                  })}
+                </Button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const NewOrganizationForm = ({
     onSubmit,
     onCancel,
@@ -3244,19 +3586,19 @@ export default function BookingSystem() {
                 </div>
                 <div className="text-center">
                   <div className="text-xl font-bold text-green-600">
-                    {stats.available}
+                    {stats.available}/{stats.freeBeds}
                   </div>
                   <div className="text-xs text-gray-600">Свободно</div>
                 </div>
                 <div className="text-center">
                   <div className="text-xl font-bold text-red-600">
-                    {stats.occupied}
+                    {stats.occupied}/{stats.occupiedBeds}
                   </div>
                   <div className="text-xs text-gray-600">Занято</div>
                 </div>
                 <div className="text-center">
                   <div className="text-xl font-bold text-yellow-600">
-                    {stats.booked}
+                    {stats.booked}/{stats.bookedBeds}
                   </div>
                   <div className="text-xs text-gray-600">Забронировано</div>
                 </div>
@@ -3277,19 +3619,26 @@ export default function BookingSystem() {
                   Ночной аудит
                 </Button>
                 {auditHistory.length > 0 && (
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      const lastAudit = auditHistory[auditHistory.length - 1];
-                      setCurrentDate(lastAudit.date);
-                      setBookings(lastAudit.bookings);
-                      setRoomsData(lastAudit.rooms);
-                      setAuditHistory((prev) => prev.slice(0, -1));
+                  <AuditCalendarPopup
+                    auditHistory={auditHistory}
+                    onSelectDate={(audit, index) => {
+                      setCurrentDate(audit.date);
+                      setBookings(audit.bookings);
+                      setRoomsData(audit.rooms);
+                      setAuditHistory((prev) => {
+                        const updated = prev.slice(0, index);
+                        localStorage.setItem(
+                          "sanatorium_auditHistory",
+                          JSON.stringify(updated),
+                        );
+                        return updated;
+                      });
+                      localStorage.setItem(
+                        "sanatorium_currentDate",
+                        audit.date.toISOString(),
+                      );
                     }}
-                    className="border-indigo-300 text-indigo-700 hover:bg-indigo-50"
-                  >
-                    ← Назад
-                  </Button>
+                  />
                 )}
               </div>
             </div>
@@ -3814,6 +4163,50 @@ export default function BookingSystem() {
                         onChange={(e) => setBookingSearchTerm(e.target.value)}
                       />
                     </div>
+                    <div>
+                      <Label htmlFor="booking-checkin-filter">
+                        Фильтр по дате заезда
+                      </Label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className="w-full justify-start text-left font-normal"
+                          >
+                            <Calendar className="mr-2 h-4 w-4" />
+                            {bookingCheckInDateFilter
+                              ? bookingCheckInDateFilter.toLocaleDateString(
+                                  "ru-RU",
+                                )
+                              : "Выберите дату"}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <CalendarComponent
+                            mode="single"
+                            selected={bookingCheckInDateFilter || undefined}
+                            onSelect={(date) =>
+                              setBookingCheckInDateFilter(date || null)
+                            }
+                            initialFocus
+                          />
+                          {bookingCheckInDateFilter && (
+                            <div className="p-3 border-t">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="w-full"
+                                onClick={() =>
+                                  setBookingCheckInDateFilter(null)
+                                }
+                              >
+                                Сбросить фильтр
+                              </Button>
+                            </div>
+                          )}
+                        </PopoverContent>
+                      </Popover>
+                    </div>
                     <div className="text-sm text-gray-600">
                       <p>Всего броней: {bookings.length}</p>
                       <p>Найдено: {filteredBookings.length}</p>
@@ -3859,12 +4252,174 @@ export default function BookingSystem() {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Номер</TableHead>
-                          <TableHead>Гость</TableHead>
-                          <TableHead>Заезд</TableHead>
-                          <TableHead>Выезд</TableHead>
-                          <TableHead>Статус</TableHead>
-                          <TableHead>Путевка</TableHead>
+                          <TableHead
+                            className="cursor-pointer hover:bg-gray-100"
+                            onClick={() => {
+                              if (bookingSortField === "room") {
+                                setBookingSortDirection(
+                                  bookingSortDirection === "asc"
+                                    ? "desc"
+                                    : "asc",
+                                );
+                              } else {
+                                setBookingSortField("room");
+                                setBookingSortDirection("asc");
+                              }
+                            }}
+                          >
+                            <div className="flex items-center gap-1">
+                              Номер
+                              {bookingSortField === "room" ? (
+                                bookingSortDirection === "asc" ? (
+                                  <ArrowUp className="w-4 h-4" />
+                                ) : (
+                                  <ArrowDown className="w-4 h-4" />
+                                )
+                              ) : (
+                                <ArrowUpDown className="w-4 h-4 opacity-30" />
+                              )}
+                            </div>
+                          </TableHead>
+                          <TableHead
+                            className="cursor-pointer hover:bg-gray-100"
+                            onClick={() => {
+                              if (bookingSortField === "guest") {
+                                setBookingSortDirection(
+                                  bookingSortDirection === "asc"
+                                    ? "desc"
+                                    : "asc",
+                                );
+                              } else {
+                                setBookingSortField("guest");
+                                setBookingSortDirection("asc");
+                              }
+                            }}
+                          >
+                            <div className="flex items-center gap-1">
+                              Гость
+                              {bookingSortField === "guest" ? (
+                                bookingSortDirection === "asc" ? (
+                                  <ArrowUp className="w-4 h-4" />
+                                ) : (
+                                  <ArrowDown className="w-4 h-4" />
+                                )
+                              ) : (
+                                <ArrowUpDown className="w-4 h-4 opacity-30" />
+                              )}
+                            </div>
+                          </TableHead>
+                          <TableHead
+                            className="cursor-pointer hover:bg-gray-100"
+                            onClick={() => {
+                              if (bookingSortField === "checkIn") {
+                                setBookingSortDirection(
+                                  bookingSortDirection === "asc"
+                                    ? "desc"
+                                    : "asc",
+                                );
+                              } else {
+                                setBookingSortField("checkIn");
+                                setBookingSortDirection("asc");
+                              }
+                            }}
+                          >
+                            <div className="flex items-center gap-1">
+                              Заезд
+                              {bookingSortField === "checkIn" ? (
+                                bookingSortDirection === "asc" ? (
+                                  <ArrowUp className="w-4 h-4" />
+                                ) : (
+                                  <ArrowDown className="w-4 h-4" />
+                                )
+                              ) : (
+                                <ArrowUpDown className="w-4 h-4 opacity-30" />
+                              )}
+                            </div>
+                          </TableHead>
+                          <TableHead
+                            className="cursor-pointer hover:bg-gray-100"
+                            onClick={() => {
+                              if (bookingSortField === "checkOut") {
+                                setBookingSortDirection(
+                                  bookingSortDirection === "asc"
+                                    ? "desc"
+                                    : "asc",
+                                );
+                              } else {
+                                setBookingSortField("checkOut");
+                                setBookingSortDirection("asc");
+                              }
+                            }}
+                          >
+                            <div className="flex items-center gap-1">
+                              Выезд
+                              {bookingSortField === "checkOut" ? (
+                                bookingSortDirection === "asc" ? (
+                                  <ArrowUp className="w-4 h-4" />
+                                ) : (
+                                  <ArrowDown className="w-4 h-4" />
+                                )
+                              ) : (
+                                <ArrowUpDown className="w-4 h-4 opacity-30" />
+                              )}
+                            </div>
+                          </TableHead>
+                          <TableHead
+                            className="cursor-pointer hover:bg-gray-100"
+                            onClick={() => {
+                              if (bookingSortField === "status") {
+                                setBookingSortDirection(
+                                  bookingSortDirection === "asc"
+                                    ? "desc"
+                                    : "asc",
+                                );
+                              } else {
+                                setBookingSortField("status");
+                                setBookingSortDirection("asc");
+                              }
+                            }}
+                          >
+                            <div className="flex items-center gap-1">
+                              Статус
+                              {bookingSortField === "status" ? (
+                                bookingSortDirection === "asc" ? (
+                                  <ArrowUp className="w-4 h-4" />
+                                ) : (
+                                  <ArrowDown className="w-4 h-4" />
+                                )
+                              ) : (
+                                <ArrowUpDown className="w-4 h-4 opacity-30" />
+                              )}
+                            </div>
+                          </TableHead>
+                          <TableHead
+                            className="cursor-pointer hover:bg-gray-100"
+                            onClick={() => {
+                              if (bookingSortField === "voucher") {
+                                setBookingSortDirection(
+                                  bookingSortDirection === "asc"
+                                    ? "desc"
+                                    : "asc",
+                                );
+                              } else {
+                                setBookingSortField("voucher");
+                                setBookingSortDirection("asc");
+                              }
+                            }}
+                          >
+                            <div className="flex items-center gap-1">
+                              Путевка
+                              {bookingSortField === "voucher" ? (
+                                bookingSortDirection === "asc" ? (
+                                  <ArrowUp className="w-4 h-4" />
+                                ) : (
+                                  <ArrowDown className="w-4 h-4" />
+                                )
+                              ) : (
+                                <ArrowUpDown className="w-4 h-4 opacity-30" />
+                              )}
+                            </div>
+                          </TableHead>
                           <TableHead>Действия</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -3873,8 +4428,24 @@ export default function BookingSystem() {
                           const room = roomsData.find(
                             (r) => r.id === booking.roomId,
                           );
+                          // Check if booking is un-checked-in after night audit
+                          const today = new Date(currentDate);
+                          today.setHours(0, 0, 0, 0);
+                          const checkInDate = new Date(booking.checkInDate);
+                          checkInDate.setHours(0, 0, 0, 0);
+                          const isUncheckedIn =
+                            (booking.status === "booked" ||
+                              booking.status === "confirmed") &&
+                            checkInDate < today;
+
                           return (
-                            <TableRow key={booking.id}>
+                            <TableRow
+                              key={booking.id}
+                              className={cn(
+                                isUncheckedIn &&
+                                  "bg-red-50 hover:bg-red-100 border-l-4 border-l-red-500",
+                              )}
+                            >
                               <TableCell className="font-medium">
                                 {room?.number || "N/A"}
                               </TableCell>
@@ -3890,7 +4461,13 @@ export default function BookingSystem() {
                                 )}
                               </TableCell>
                               <TableCell>
-                                <Badge variant="outline">
+                                <Badge
+                                  variant="outline"
+                                  className={cn(
+                                    isUncheckedIn &&
+                                      "bg-red-100 text-red-800 border-red-300",
+                                  )}
+                                >
                                   {booking.status === "confirmed"
                                     ? "Подтверждена"
                                     : booking.status === "booked"
@@ -4062,7 +4639,7 @@ export default function BookingSystem() {
                       <div className="space-y-3">
                         <div>
                           <Label className="text-sm font-medium text-blue-700">
-                            Дата начала
+                            Дата начала *
                           </Label>
                           <Input
                             type="date"
@@ -4073,7 +4650,7 @@ export default function BookingSystem() {
                         </div>
                         <div>
                           <Label className="text-sm font-medium text-blue-700">
-                            Дата окончания
+                            Дата окончания (необязательно)
                           </Label>
                           <Input
                             type="date"
@@ -4088,17 +4665,25 @@ export default function BookingSystem() {
                     <div className="bg-blue-100/50 p-3 rounded-lg text-sm text-blue-700">
                       <p>
                         <strong>Период:</strong>{" "}
-                        {new Date(reportDateFrom).toLocaleDateString("ru-RU")} -{" "}
-                        {new Date(reportDateTo).toLocaleDateString("ru-RU")}
+                        {new Date(reportDateFrom).toLocaleDateString("ru-RU")}
+                        {reportDateTo && reportDateTo !== reportDateFrom && (
+                          <>
+                            {" "}
+                            -{" "}
+                            {new Date(reportDateTo).toLocaleDateString("ru-RU")}
+                          </>
+                        )}
                       </p>
-                      <p>
-                        <strong>Дней:</strong>{" "}
-                        {Math.ceil(
-                          (new Date(reportDateTo).getTime() -
-                            new Date(reportDateFrom).getTime()) /
-                            (1000 * 60 * 60 * 24),
-                        ) + 1}
-                      </p>
+                      {reportDateTo && reportDateTo !== reportDateFrom && (
+                        <p>
+                          <strong>Дней:</strong>{" "}
+                          {Math.ceil(
+                            (new Date(reportDateTo).getTime() -
+                              new Date(reportDateFrom).getTime()) /
+                              (1000 * 60 * 60 * 24),
+                          ) + 1}
+                        </p>
+                      )}
                     </div>
                   </div>
                 </CardContent>
@@ -4338,15 +4923,16 @@ export default function BookingSystem() {
                   <div className="space-y-4">
                     <div className="bg-white/70 p-4 rounded-lg">
                       <h4 className="font-semibold text-purple-800 mb-3">
-                        Статистика за период
+                        Статистика на{" "}
+                        {new Date(reportDateFrom).toLocaleDateString("ru-RU")}
                       </h4>
                       <div className="grid grid-cols-2 gap-4 text-sm">
                         <div className="bg-purple-100/50 p-3 rounded">
                           <div className="font-semibold text-purple-900">
-                            Всего номеров
+                            Всего номеров/мест
                           </div>
                           <div className="text-2xl font-bold text-purple-700">
-                            {roomsData.length}
+                            {roomsData.length}/{reportStats.totalBeds}
                           </div>
                         </div>
                         <div className="bg-green-100/50 p-3 rounded">
@@ -4354,7 +4940,7 @@ export default function BookingSystem() {
                             Свободно
                           </div>
                           <div className="text-2xl font-bold text-green-700">
-                            {stats.available}
+                            {reportStats.available}/{reportStats.freeBeds}
                           </div>
                         </div>
                         <div className="bg-red-100/50 p-3 rounded">
@@ -4362,7 +4948,7 @@ export default function BookingSystem() {
                             Занято
                           </div>
                           <div className="text-2xl font-bold text-red-700">
-                            {stats.occupied}
+                            {reportStats.occupied}/{reportStats.occupiedBeds}
                           </div>
                         </div>
                         <div className="bg-yellow-100/50 p-3 rounded">
@@ -4370,7 +4956,7 @@ export default function BookingSystem() {
                             Забронировано
                           </div>
                           <div className="text-2xl font-bold text-yellow-700">
-                            {stats.booked}
+                            {reportStats.booked}/{reportStats.bookedBeds}
                           </div>
                         </div>
                       </div>
@@ -4378,48 +4964,94 @@ export default function BookingSystem() {
 
                     <div className="bg-white/70 p-4 rounded-lg">
                       <h4 className="font-semibold text-purple-800 mb-3">
-                        Активные бронирования
+                        Бронирования на выбранную дату
                       </h4>
                       <div className="space-y-2 max-h-40 overflow-y-auto">
-                        {bookings
-                          .filter(
-                            (b) =>
-                              b.status === "checked_in" ||
-                              b.status === "booked",
-                          )
-                          .slice(0, 5)
-                          .map((booking) => {
-                            const room = roomsData.find(
-                              (r) => r.id === booking.roomId,
-                            );
+                        {(() => {
+                          const reportDate = new Date(reportDateFrom);
+                          const reportEndDate = reportDateTo
+                            ? new Date(reportDateTo)
+                            : reportDate;
+                          const relevantBookings = bookings.filter((b) => {
+                            if (
+                              b.status !== "checked_in" &&
+                              b.status !== "booked"
+                            ) {
+                              return false;
+                            }
+                            // If only start date is selected, show bookings active on that date
+                            if (
+                              !reportDateTo ||
+                              reportDateTo === reportDateFrom
+                            ) {
+                              return (
+                                b.checkInDate <= reportDate &&
+                                b.checkOutDate >= reportDate
+                              );
+                            }
+                            // If date range is selected, show bookings that overlap with the range
                             return (
-                              <div
-                                key={booking.id}
-                                className="flex justify-between items-center text-sm bg-purple-100/50 p-2 rounded"
-                              >
-                                <span className="font-medium">
-                                  {booking.guestName}
-                                </span>
-                                <span className="text-purple-600">
-                                  №{room?.number}
-                                </span>
-                              </div>
+                              b.checkInDate <= reportEndDate &&
+                              b.checkOutDate >= reportDate
                             );
-                          })}
-                        {bookings.filter(
-                          (b) =>
-                            b.status === "checked_in" || b.status === "booked",
-                        ).length > 5 && (
-                          <div className="text-xs text-purple-600 text-center">
-                            +
-                            {bookings.filter(
-                              (b) =>
-                                b.status === "checked_in" ||
-                                b.status === "booked",
-                            ).length - 5}{" "}
-                            еще...
-                          </div>
-                        )}
+                          });
+                          return relevantBookings.length > 0 ? (
+                            relevantBookings.slice(0, 5).map((booking) => {
+                              const room = roomsData.find(
+                                (r) => r.id === booking.roomId,
+                              );
+                              return (
+                                <div
+                                  key={booking.id}
+                                  className="flex justify-between items-center text-sm bg-purple-100/50 p-2 rounded"
+                                >
+                                  <span className="font-medium">
+                                    {booking.guestName}
+                                  </span>
+                                  <span className="text-purple-600">
+                                    №{room?.number}
+                                  </span>
+                                </div>
+                              );
+                            })
+                          ) : (
+                            <div className="text-sm text-gray-500 text-center py-4">
+                              Нет бронирований на выбранную дату
+                            </div>
+                          );
+                        })()}
+                        {(() => {
+                          const reportDate = new Date(reportDateFrom);
+                          const reportEndDate = reportDateTo
+                            ? new Date(reportDateTo)
+                            : reportDate;
+                          const relevantBookings = bookings.filter((b) => {
+                            if (
+                              b.status !== "checked_in" &&
+                              b.status !== "booked"
+                            ) {
+                              return false;
+                            }
+                            if (
+                              !reportDateTo ||
+                              reportDateTo === reportDateFrom
+                            ) {
+                              return (
+                                b.checkInDate <= reportDate &&
+                                b.checkOutDate >= reportDate
+                              );
+                            }
+                            return (
+                              b.checkInDate <= reportEndDate &&
+                              b.checkOutDate >= reportDate
+                            );
+                          });
+                          return relevantBookings.length > 5 ? (
+                            <div className="text-xs text-purple-600 text-center">
+                              +{relevantBookings.length - 5} еще...
+                            </div>
+                          ) : null;
+                        })()}
                       </div>
                     </div>
 
@@ -4431,13 +5063,15 @@ export default function BookingSystem() {
                         <div
                           className="bg-gradient-to-r from-purple-500 to-purple-600 h-4 rounded-full transition-all duration-300"
                           style={{
-                            width: `${Math.round(((stats.occupied + stats.booked) / stats.total) * 100)}%`,
+                            width: `${Math.round(((reportStats.occupied + reportStats.booked) / reportStats.total) * 100)}%`,
                           }}
                         ></div>
                       </div>
                       <div className="text-center text-sm text-purple-700 mt-2">
                         {Math.round(
-                          ((stats.occupied + stats.booked) / stats.total) * 100,
+                          ((reportStats.occupied + reportStats.booked) /
+                            reportStats.total) *
+                            100,
                         )}
                         % загружено
                       </div>
