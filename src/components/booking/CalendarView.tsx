@@ -317,9 +317,9 @@ export default function CalendarView({
                 room.type === "single" || room.type === "single_improved"
                   ? 1
                   : room.type === "family" || room.type === "family_improved"
-                    ? 3
+                    ? 2
                     : room.type === "luxury"
-                      ? 4
+                      ? 1
                       : 2;
               // Only count current bookings for the current date
               const currentOccupancy = getBookingsForRoomAndDate(
