@@ -94,9 +94,9 @@ const getRoomCapacity = (type: Room["type"]) => {
       return 2;
     case "family":
     case "family_improved":
-      return 3;
+      return 2;
     case "luxury":
-      return 4;
+      return 1;
     default:
       return 1;
   }
