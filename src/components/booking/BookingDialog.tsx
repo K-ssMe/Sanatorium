@@ -56,9 +56,23 @@ export default function BookingDialog({
     propSelectedRoomId || room?.id || "",
   );
 
+  // Track if dialog was just opened to prevent unnecessary resets
+  const wasOpenRef = React.useRef(false);
+
   // Main effect to handle form initialization for new bookings
   React.useEffect(() => {
-    if (!isOpen) return;
+    // Only initialize when dialog opens (transitions from closed to open)
+    if (!isOpen) {
+      wasOpenRef.current = false;
+      return;
+    }
+
+    // Skip if dialog was already open
+    if (wasOpenRef.current) {
+      return;
+    }
+
+    wasOpenRef.current = true;
 
     // Clear all form fields for new booking
     setGuestName("");
@@ -99,9 +113,9 @@ export default function BookingDialog({
       setGuestAge(prefilledGuest.age.toString());
       setGuestAddress(prefilledGuest.address);
       setGuestGender(prefilledGuest.gender);
-      setGuestPassport(prefilledGuest.passportNumber);
+      setGuestPassport(prefilledGuest.passportNumber || "");
     }
-  }, [room, prefilledGuest, isOpen, propSelectedRoomId, rooms, selectedDate]);
+  }, [isOpen]);
   const [guestName, setGuestName] = useState("");
   const [guestPhone, setGuestPhone] = useState("");
   const [guestAge, setGuestAge] = useState("");
@@ -452,12 +466,10 @@ export default function BookingDialog({
             <Button variant="outline" onClick={onClose}>
               Отмена
             </Button>
-            <div className="flex gap-3">
-              <Button onClick={handleCreateBooking}>
-                <Save className="w-4 h-4 mr-2" />
-                Создать бронирование
-              </Button>
-            </div>
+            <Button onClick={handleCreateBooking}>
+              <Save className="w-4 h-4 mr-2" />
+              Создать бронирование
+            </Button>
           </div>
         </div>
       </DialogContent>
