@@ -1511,9 +1511,10 @@ export default function BookingSystem() {
     [roomsData, bookings, currentDate],
   );
 
-  // Compute stats for report date
+  // Compute stats for report date - based on the selected reporting period start date
   const reportStats = useMemo(() => {
     const reportDate = new Date(reportDateFrom);
+    reportDate.setHours(0, 0, 0, 0);
     return getStatsForDate(reportDate);
   }, [roomsData, bookings, reportDateFrom]);
 
