@@ -308,9 +308,9 @@ function getCapacityFromType(type: Room["type"]): number {
       return 2;
     case "family":
     case "family_improved":
-      return 3;
+      return 2;
     case "luxury":
-      return 4;
+      return 1;
     default:
       return 2;
   }
