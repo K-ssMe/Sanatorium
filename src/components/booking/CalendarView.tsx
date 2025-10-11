@@ -138,11 +138,15 @@ export default function CalendarView({
   const getBookingsForRoomAndDate = (roomId: string, date: Date) => {
     return bookings.filter((booking) => {
       const checkIn = new Date(booking.checkInDate);
+      checkIn.setHours(0, 0, 0, 0);
       const checkOut = new Date(booking.checkOutDate);
+      checkOut.setHours(0, 0, 0, 0);
+      const checkDate = new Date(date);
+      checkDate.setHours(0, 0, 0, 0);
       return (
         booking.roomId === roomId &&
-        date >= checkIn &&
-        date < checkOut &&
+        checkDate >= checkIn &&
+        checkDate <= checkOut &&
         (booking.status === "checked_in" ||
           booking.status === "booked" ||
           booking.status === "confirmed")
