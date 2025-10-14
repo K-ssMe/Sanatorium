@@ -597,7 +597,23 @@ export default function BookingSystem() {
         }
       }
 
-      // Rule 2: confirmed bookings with check-in date today -> booked
+      // Rule 2: booked bookings with expired checkout date -> completed
+      if (booking.status === "booked") {
+        const checkOutDate = new Date(booking.checkOutDate);
+        checkOutDate.setHours(0, 0, 0, 0);
+
+        // Auto-complete if checkout date has passed (day after checkout)
+        if (checkOutDate < today) {
+          completedBookings++;
+          return {
+            ...booking,
+            status: "completed" as const,
+            actualCheckOutAt: new Date(),
+          };
+        }
+      }
+
+      // Rule 3: confirmed bookings with check-in date today -> booked
       if (
         booking.status === "confirmed" &&
         booking.checkInDate.toDateString() === today.toDateString()
@@ -3978,10 +3994,43 @@ export default function BookingSystem() {
                         <Users className="w-5 h-5" />
                         Список гостей
                       </div>
-                      <Button size="sm" onClick={handleAddNewGuest}>
-                        <Plus className="w-4 h-4 mr-2" />
-                        Добавить гостя
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button size="sm" onClick={handleAddNewGuest}>
+                          <Plus className="w-4 h-4 mr-2" />
+                          Добавить гостя
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => {
+                            if (selectedGuest) {
+                              if (
+                                confirm(
+                                  `Вы уверены, что хотите удалить гостя ${selectedGuest.fullName}? Это действие нельзя отменить.`,
+                                )
+                              ) {
+                                setGuests((prev) => {
+                                  const updated = prev.filter(
+                                    (g) => g.id !== selectedGuest.id,
+                                  );
+                                  localStorage.setItem(
+                                    "sanatorium_guests",
+                                    JSON.stringify(updated),
+                                  );
+                                  return updated;
+                                });
+                                setSelectedGuest(null);
+                                alert("Гость успешно удален!");
+                              }
+                            } else {
+                              alert("Пожалуйста, выберите гостя для удаления");
+                            }
+                          }}
+                        >
+                          <Trash2 className="w-4 h-4 mr-2" />
+                          Удалить
+                        </Button>
+                      </div>
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -4019,16 +4068,29 @@ export default function BookingSystem() {
                                 {guest.createdAt.toLocaleDateString("ru-RU")}
                               </TableCell>
                               <TableCell>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => {
-                                    setSelectedGuest(guest);
-                                    setIsGuestCardOpen(true);
-                                  }}
-                                >
-                                  Просмотр
-                                </Button>
+                                <div className="flex gap-2">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => {
+                                      setSelectedGuest(guest);
+                                      setIsGuestCardOpen(true);
+                                    }}
+                                  >
+                                    Просмотр
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => setSelectedGuest(guest)}
+                                    className={cn(
+                                      selectedGuest?.id === guest.id &&
+                                        "bg-blue-100 border-blue-500",
+                                    )}
+                                  >
+                                    {selectedGuest?.id === guest.id ? "✓" : "○"}
+                                  </Button>
+                                </div>
                               </TableCell>
                             </TableRow>
                           );
@@ -4235,18 +4297,56 @@ export default function BookingSystem() {
                         <FileText className="w-5 h-5" />
                         Список броней
                       </div>
-                      <Button
-                        size="sm"
-                        onClick={() => {
-                          setSelectedRoom(null);
-                          setSelectedBookingId(null);
-                          setIsCreatingNew(true);
-                          setIsBookingDialogOpen(true);
-                        }}
-                      >
-                        <Plus className="w-4 h-4 mr-2" />
-                        Создать бронь
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            setSelectedRoom(null);
+                            setSelectedBookingId(null);
+                            setIsCreatingNew(true);
+                            setIsBookingDialogOpen(true);
+                          }}
+                        >
+                          <Plus className="w-4 h-4 mr-2" />
+                          Создать бронь
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => {
+                            if (selectedBookingId) {
+                              const bookingToDelete = bookings.find(
+                                (b) => b.id === selectedBookingId,
+                              );
+                              if (bookingToDelete) {
+                                if (
+                                  confirm(
+                                    `Вы уверены, что хотите удалить бронь для ${bookingToDelete.guestName}? Это действие нельзя отменить.`,
+                                  )
+                                ) {
+                                  setBookings((prev) => {
+                                    const updated = prev.filter(
+                                      (b) => b.id !== selectedBookingId,
+                                    );
+                                    localStorage.setItem(
+                                      "sanatorium_bookings",
+                                      JSON.stringify(updated),
+                                    );
+                                    return updated;
+                                  });
+                                  setSelectedBookingId(null);
+                                  alert("Бронь успешно удалена!");
+                                }
+                              }
+                            } else {
+                              alert("Пожалуйста, выберите бронь для удаления");
+                            }
+                          }}
+                        >
+                          <Trash2 className="w-4 h-4 mr-2" />
+                          Удалить
+                        </Button>
+                      </div>
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -4486,47 +4586,66 @@ export default function BookingSystem() {
                                 {booking.voucherNumber || "-"}
                               </TableCell>
                               <TableCell>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => {
-                                    if (booking.status === "completed") {
-                                      // For completed bookings, open guest card
-                                      const guest = guests.find(
-                                        (g) => g.id === booking.guestId,
-                                      );
-                                      if (guest) {
-                                        setSelectedGuest(guest);
-                                        setIsGuestCardOpen(true);
-                                      }
-                                    } else {
-                                      // For other bookings, open booking details with the specific booking
-                                      const room = roomsData.find(
-                                        (r) => r.id === booking.roomId,
-                                      );
-                                      if (room) {
-                                        // Close all dialogs first
-                                        setIsBookingDialogOpen(false);
-                                        setIsBookingDetailsOpen(false);
-                                        setSelectedRoom(null);
-                                        setSelectedBookingId(null);
-                                        setSelectedDate(null);
-                                        setIsCreatingNew(false);
-
-                                        // Use setTimeout to ensure state is cleared
-                                        setTimeout(() => {
-                                          setSelectedRoom(room);
-                                          setSelectedBookingId(booking.id);
-                                          setSelectedDate(booking.checkInDate);
+                                <div className="flex gap-2">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => {
+                                      if (booking.status === "completed") {
+                                        // For completed bookings, open guest card
+                                        const guest = guests.find(
+                                          (g) => g.id === booking.guestId,
+                                        );
+                                        if (guest) {
+                                          setSelectedGuest(guest);
+                                          setIsGuestCardOpen(true);
+                                        }
+                                      } else {
+                                        // For other bookings, open booking details with the specific booking
+                                        const room = roomsData.find(
+                                          (r) => r.id === booking.roomId,
+                                        );
+                                        if (room) {
+                                          // Close all dialogs first
+                                          setIsBookingDialogOpen(false);
+                                          setIsBookingDetailsOpen(false);
+                                          setSelectedRoom(null);
+                                          setSelectedBookingId(null);
+                                          setSelectedDate(null);
                                           setIsCreatingNew(false);
-                                          setIsBookingDetailsOpen(true);
-                                        }, 10);
+
+                                          // Use setTimeout to ensure state is cleared
+                                          setTimeout(() => {
+                                            setSelectedRoom(room);
+                                            setSelectedBookingId(booking.id);
+                                            setSelectedDate(
+                                              booking.checkInDate,
+                                            );
+                                            setIsCreatingNew(false);
+                                            setIsBookingDetailsOpen(true);
+                                          }, 10);
+                                        }
                                       }
+                                    }}
+                                  >
+                                    Просмотр
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() =>
+                                      setSelectedBookingId(booking.id)
                                     }
-                                  }}
-                                >
-                                  Просмотр
-                                </Button>
+                                    className={cn(
+                                      selectedBookingId === booking.id &&
+                                        "bg-blue-100 border-blue-500",
+                                    )}
+                                  >
+                                    {selectedBookingId === booking.id
+                                      ? "✓"
+                                      : "○"}
+                                  </Button>
+                                </div>
                               </TableCell>
                             </TableRow>
                           );
@@ -5038,7 +5157,7 @@ export default function BookingSystem() {
                               reportDateTo === reportDateFrom
                             ) {
                               return (
-                                b.checkInDate <= reportDate &&
+                                b.checkInDate <= reportEndDate &&
                                 b.checkOutDate >= reportDate
                               );
                             }
