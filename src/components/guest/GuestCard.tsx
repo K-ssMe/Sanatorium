@@ -34,6 +34,7 @@ import {
   Save,
   X,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface GuestCardProps {
   guest?: Guest | null;
@@ -60,6 +61,10 @@ export default function GuestCard({
 }: GuestCardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editedGuest, setEditedGuest] = useState<Guest | null>(null);
+  const [isSplitDialogOpen, setIsSplitDialogOpen] = useState(false);
+  const [selectedBookingsToSplit, setSelectedBookingsToSplit] = useState<
+    string[]
+  >([]);
 
   if (!guest) return null;
 
@@ -98,6 +103,86 @@ export default function GuestCard({
 
   const currentGuest = isEditing ? editedGuest : guest;
 
+  const handleSplitGuest = () => {
+    if (selectedBookingsToSplit.length === 0) {
+      alert("Пожалуйста, выберите хотя бы одно бронирование для разделения");
+      return;
+    }
+
+    if (selectedBookingsToSplit.length === bookings.length) {
+      alert(
+        "Нельзя выбрать все бронирования. Оставьте хотя бы одно для текущего гостя.",
+      );
+      return;
+    }
+
+    // Create a new guest ID for the split guest
+    const newGuestId = `guest-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+    // Get the first selected booking to extract guest data
+    const firstSelectedBooking = bookings.find((b) =>
+      selectedBookingsToSplit.includes(b.id),
+    );
+    if (!firstSelectedBooking) return;
+
+    // Create new guest with data from the selected booking
+    const nameParts = firstSelectedBooking.guestName.split(" ");
+    const newGuest: Guest = {
+      id: newGuestId,
+      firstName: nameParts[1] || "",
+      lastName: nameParts[0] || "",
+      middleName: nameParts[2] || undefined,
+      fullName: firstSelectedBooking.guestName,
+      phone: firstSelectedBooking.guestPhone,
+      age: firstSelectedBooking.guestAge,
+      dateOfBirth: new Date(
+        new Date().getFullYear() - firstSelectedBooking.guestAge,
+        0,
+        1,
+      ),
+      address: firstSelectedBooking.guestAddress,
+      passportNumber: firstSelectedBooking.guestPassport || undefined,
+      gender: firstSelectedBooking.guestGender,
+      createdAt: new Date(),
+    };
+
+    // Update the selected bookings to point to the new guest
+    const updatedBookings = bookings.map((booking) => {
+      if (selectedBookingsToSplit.includes(booking.id)) {
+        return {
+          ...booking,
+          guestId: newGuestId,
+        };
+      }
+      return booking;
+    });
+
+    // Save the new guest and updated bookings
+    const currentGuests = JSON.parse(
+      localStorage.getItem("sanatorium_guests") || "[]",
+    );
+    const updatedGuests = [...currentGuests, newGuest];
+    localStorage.setItem("sanatorium_guests", JSON.stringify(updatedGuests));
+    localStorage.setItem(
+      "sanatorium_bookings",
+      JSON.stringify(updatedBookings),
+    );
+
+    alert(
+      `Гость успешно разделен!\n\n` +
+        `Создан новый гость: ${newGuest.fullName}\n` +
+        `Перенесено бронирований: ${selectedBookingsToSplit.length}\n\n` +
+        `Пожалуйста, обновите страницу для отображения изменений.`,
+    );
+
+    setIsSplitDialogOpen(false);
+    setSelectedBookingsToSplit([]);
+    onClose();
+
+    // Reload the page to reflect changes
+    window.location.reload();
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-white">
@@ -108,10 +193,23 @@ export default function GuestCard({
               Карточка гостя
             </div>
             {!isEditing ? (
-              <Button variant="outline" size="sm" onClick={handleEditStart}>
-                <Edit className="w-4 h-4 mr-2" />
-                Редактировать
-              </Button>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={handleEditStart}>
+                  <Edit className="w-4 h-4 mr-2" />
+                  Редактировать
+                </Button>
+                {bookings.length > 1 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsSplitDialogOpen(true)}
+                    className="border-orange-300 text-orange-700 hover:bg-orange-50"
+                  >
+                    <UserCheck className="w-4 h-4 mr-2" />
+                    Разделить гостя
+                  </Button>
+                )}
+              </div>
             ) : (
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" onClick={handleEditSave}>
@@ -623,6 +721,133 @@ export default function GuestCard({
           </Button>
         </div>
       </DialogContent>
+
+      {/* Split Guest Dialog */}
+      <Dialog open={isSplitDialogOpen} onOpenChange={setIsSplitDialogOpen}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto bg-white">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-orange-800">
+              <UserCheck className="w-6 h-6" />
+              Разделить гостя - {guest?.fullName}
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+              <h4 className="font-semibold text-orange-800 mb-2">
+                Инструкция:
+              </h4>
+              <p className="text-sm text-orange-700">
+                Выберите бронирования, которые принадлежат другому человеку. Эти
+                бронирования будут перенесены на нового гостя с данными из
+                первого выбранного бронирования.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <h4 className="font-semibold text-gray-800">
+                Выберите бронирования для разделения:
+              </h4>
+              {bookings.map((booking) => (
+                <div
+                  key={booking.id}
+                  className={cn(
+                    "flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-colors",
+                    selectedBookingsToSplit.includes(booking.id)
+                      ? "border-orange-500 bg-orange-50"
+                      : "border-gray-200 hover:bg-gray-50",
+                  )}
+                  onClick={() => {
+                    setSelectedBookingsToSplit((prev) =>
+                      prev.includes(booking.id)
+                        ? prev.filter((id) => id !== booking.id)
+                        : [...prev, booking.id],
+                    );
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedBookingsToSplit.includes(booking.id)}
+                    onChange={() => {}}
+                    className="w-4 h-4"
+                  />
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold">
+                        Номер {booking.roomId}
+                      </span>
+                      <Badge
+                        variant={
+                          booking.status === "active" ||
+                          booking.status === "checked_in"
+                            ? "default"
+                            : "secondary"
+                        }
+                        className="text-xs"
+                      >
+                        {booking.status === "active"
+                          ? "Активно"
+                          : booking.status === "checked_in"
+                            ? "Заселен"
+                            : booking.status === "completed"
+                              ? "Завершено"
+                              : booking.status === "cancelled"
+                                ? "Отменено"
+                                : booking.status}
+                      </Badge>
+                    </div>
+                    <div className="text-sm text-gray-600">
+                      {booking.checkInDate.toLocaleDateString("ru-RU")} -{" "}
+                      {booking.checkOutDate.toLocaleDateString("ru-RU")}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {booking.guestName} • {booking.guestPhone}
+                      {booking.voucherNumber && (
+                        <span className="ml-2">
+                          • Путевка: {booking.voucherNumber}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {selectedBookingsToSplit.length > 0 && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h4 className="font-semibold text-blue-800 mb-2">
+                  Выбрано бронирований: {selectedBookingsToSplit.length}
+                </h4>
+                <p className="text-sm text-blue-700">
+                  Будет создан новый гость с данными из первого выбранного
+                  бронирования. Остальные бронирования (
+                  {bookings.length - selectedBookingsToSplit.length}) останутся
+                  у текущего гостя.
+                </p>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-3 pt-4">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setIsSplitDialogOpen(false);
+                  setSelectedBookingsToSplit([]);
+                }}
+              >
+                Отмена
+              </Button>
+              <Button
+                onClick={handleSplitGuest}
+                className="bg-orange-600 hover:bg-orange-700"
+                disabled={selectedBookingsToSplit.length === 0}
+              >
+                Разделить гостя
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }
