@@ -44,6 +44,7 @@ export interface Booking {
   secondGuestId?: string;
   secondGuestName?: string;
   secondGuestGender?: "male" | "female";
+  isConfirmed?: boolean;
   createdAt: Date;
 }
 
