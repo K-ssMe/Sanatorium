@@ -116,64 +116,115 @@ export default function GuestCard({
       return;
     }
 
-    // Create a new guest ID for the split guest
-    const newGuestId = `guest-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-
-    // Get the first selected booking to extract guest data
-    const firstSelectedBooking = bookings.find((b) =>
-      selectedBookingsToSplit.includes(b.id),
-    );
-    if (!firstSelectedBooking) return;
-
-    // Create new guest with data from the selected booking
-    const nameParts = firstSelectedBooking.guestName.split(" ");
-    const newGuest: Guest = {
-      id: newGuestId,
-      firstName: nameParts[1] || "",
-      lastName: nameParts[0] || "",
-      middleName: nameParts[2] || undefined,
-      fullName: firstSelectedBooking.guestName,
-      phone: firstSelectedBooking.guestPhone,
-      age: firstSelectedBooking.guestAge,
-      dateOfBirth: new Date(
-        new Date().getFullYear() - firstSelectedBooking.guestAge,
-        0,
-        1,
-      ),
-      address: firstSelectedBooking.guestAddress,
-      passportNumber: firstSelectedBooking.guestPassport || undefined,
-      gender: firstSelectedBooking.guestGender,
-      createdAt: new Date(),
-    };
-
-    // Update the selected bookings to point to the new guest
-    const updatedBookings = bookings.map((booking) => {
-      if (selectedBookingsToSplit.includes(booking.id)) {
-        return {
-          ...booking,
-          guestId: newGuestId,
-        };
-      }
-      return booking;
-    });
-
-    // Save the new guest and updated bookings
+    // Get all current guests and bookings from localStorage
     const currentGuests = JSON.parse(
       localStorage.getItem("sanatorium_guests") || "[]",
     );
-    const updatedGuests = [...currentGuests, newGuest];
-    localStorage.setItem("sanatorium_guests", JSON.stringify(updatedGuests));
+    const allBookings = JSON.parse(
+      localStorage.getItem("sanatorium_bookings") || "[]",
+    );
+
+    // Group selected bookings by unique guest parameters (fullName, phone, address)
+    const bookingGroups = new Map<string, Booking[]>();
+
+    selectedBookingsToSplit.forEach((bookingId) => {
+      const booking = bookings.find((b) => b.id === bookingId);
+      if (!booking) return;
+
+      // Create a unique key based on fullName, phone, and address
+      const key = `${booking.guestName}|${booking.guestPhone}|${booking.guestAddress}`;
+
+      if (!bookingGroups.has(key)) {
+        bookingGroups.set(key, []);
+      }
+      bookingGroups.get(key)!.push(booking);
+    });
+
+    // Create new guests for each unique group
+    const newGuests: Guest[] = [];
+    const updatedBookings = [...allBookings];
+
+    bookingGroups.forEach((groupBookings, key) => {
+      const firstBooking = groupBookings[0];
+
+      // Check if a guest with these exact parameters already exists
+      const existingGuest = currentGuests.find(
+        (g: Guest) =>
+          g.fullName === firstBooking.guestName &&
+          g.phone === firstBooking.guestPhone &&
+          g.address === firstBooking.guestAddress,
+      );
+
+      let targetGuestId: string;
+
+      if (existingGuest && existingGuest.id !== guest?.id) {
+        // Use existing guest if found and it's not the current guest
+        targetGuestId = existingGuest.id;
+      } else if (!existingGuest) {
+        // Create a new guest only if no matching guest exists
+        const newGuestId = `guest-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        const nameParts = firstBooking.guestName.split(" ");
+
+        const newGuest: Guest = {
+          id: newGuestId,
+          firstName: nameParts[1] || "",
+          lastName: nameParts[0] || "",
+          middleName: nameParts[2] || undefined,
+          fullName: firstBooking.guestName,
+          phone: firstBooking.guestPhone,
+          age: firstBooking.guestAge,
+          dateOfBirth: new Date(
+            new Date().getFullYear() - firstBooking.guestAge,
+            0,
+            1,
+          ),
+          address: firstBooking.guestAddress,
+          passportNumber: firstBooking.guestPassport || undefined,
+          gender: firstBooking.guestGender,
+          createdAt: new Date(),
+        };
+
+        newGuests.push(newGuest);
+        targetGuestId = newGuestId;
+      } else {
+        // If the existing guest is the current guest, skip (shouldn't happen)
+        return;
+      }
+
+      // Update all bookings in this group to point to the target guest
+      groupBookings.forEach((booking) => {
+        const bookingIndex = updatedBookings.findIndex(
+          (b) => b.id === booking.id,
+        );
+        if (bookingIndex !== -1) {
+          updatedBookings[bookingIndex] = {
+            ...updatedBookings[bookingIndex],
+            guestId: targetGuestId,
+          };
+        }
+      });
+    });
+
+    // Save the new guests and updated bookings
+    const finalGuests = [...currentGuests, ...newGuests];
+    localStorage.setItem("sanatorium_guests", JSON.stringify(finalGuests));
     localStorage.setItem(
       "sanatorium_bookings",
       JSON.stringify(updatedBookings),
     );
 
-    alert(
-      `Гость успешно разделен!\n\n` +
-        `Создан новый гость: ${newGuest.fullName}\n` +
-        `Перенесено бронирований: ${selectedBookingsToSplit.length}\n\n` +
-        `Пожалуйста, обновите страницу для отображения изменений.`,
-    );
+    const message =
+      newGuests.length > 0
+        ? `Гости успешно разделены!\n\n` +
+          `Создано новых гостей: ${newGuests.length}\n` +
+          newGuests.map((g) => `- ${g.fullName}`).join("\n") +
+          `\n\nПеренесено бронирований: ${selectedBookingsToSplit.length}\n\n` +
+          `Пожалуйста, обновите страницу для отображения изменений.`
+        : `Бронирования успешно перенесены к существующим гостям!\n\n` +
+          `Перенесено бронирований: ${selectedBookingsToSplit.length}\n\n` +
+          `Пожалуйста, обновите страницу для отображения изменений.`;
+
+    alert(message);
 
     setIsSplitDialogOpen(false);
     setSelectedBookingsToSplit([]);
