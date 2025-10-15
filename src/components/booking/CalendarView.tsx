@@ -497,6 +497,13 @@ export default function CalendarView({
                                   )}
                                 >
                                   {booking.guestName.split(" ")[0]}
+                                  {booking.isConfirmed &&
+                                    (booking.status === "booked" ||
+                                      booking.status === "confirmed") && (
+                                      <span className="absolute top-0 right-0 text-green-600 text-[10px]">
+                                        ✓
+                                      </span>
+                                    )}
                                 </div>
                                 <div className="text-gray-600 text-[8px] absolute bottom-0 right-0 z-10 bg-white px-1 rounded">
                                   {booking.duration}д
@@ -508,7 +515,7 @@ export default function CalendarView({
                                 <div className="h-full flex flex-col relative z-10">
                                   <div
                                     className={cn(
-                                      "font-semibold truncate text-[9px] flex-1 flex items-center justify-center border-b-2",
+                                      "font-semibold truncate text-[9px] flex-1 flex items-center justify-center border-b-2 relative",
                                       bookingsForDate[0].guestGender ===
                                         "female"
                                         ? "text-pink-800 bg-pink-100/80 border-pink-300"
@@ -516,11 +523,18 @@ export default function CalendarView({
                                     )}
                                   >
                                     {bookingsForDate[0].guestName.split(" ")[0]}
+                                    {bookingsForDate[0].isConfirmed &&
+                                      bookingsForDate[0].status ===
+                                        "booked" && (
+                                        <span className="absolute top-0 right-0 text-green-600 text-[10px]">
+                                          ✓
+                                        </span>
+                                      )}
                                   </div>
                                   {bookingsForDate[1] && (
                                     <div
                                       className={cn(
-                                        "font-semibold truncate text-[9px] flex-1 flex items-center justify-center",
+                                        "font-semibold truncate text-[9px] flex-1 flex items-center justify-center relative",
                                         bookingsForDate[1].guestGender ===
                                           "female"
                                           ? "text-pink-800 bg-pink-200/80"
@@ -532,6 +546,13 @@ export default function CalendarView({
                                           " ",
                                         )[0]
                                       }
+                                      {bookingsForDate[1].isConfirmed &&
+                                        bookingsForDate[1].status ===
+                                          "booked" && (
+                                          <span className="absolute top-0 right-0 text-green-600 text-[10px]">
+                                            ✓
+                                          </span>
+                                        )}
                                     </div>
                                   )}
                                 </div>
