@@ -354,6 +354,23 @@ export default function RoomGrid({
                       </div>
                     )}
 
+                    {/* Confirmation checkmark */}
+                    {(() => {
+                      const confirmedBooking = roomBookings.find(
+                        (b) => b.status === "booked" && b.isConfirmed,
+                      );
+                      if (confirmedBooking) {
+                        return (
+                          <div className="absolute top-0 right-0 w-3 h-3 bg-green-500 rounded-bl flex items-center justify-center">
+                            <span className="text-white text-[8px] font-bold">
+                              ✓
+                            </span>
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
+
                     {/* Organization badge */}
                     {(() => {
                       const roomBooking = bookings.find(
