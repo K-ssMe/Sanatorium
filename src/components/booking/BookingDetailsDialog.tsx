@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Room, Booking, computeRoomStatus } from "@/types/booking";
+import { cn } from "@/lib/utils";
 import {
   User,
   Phone,
@@ -615,13 +616,32 @@ export default function BookingDetailsDialog({
                     </div>
                   </div>
 
-                  <div>
-                    <span className="font-medium text-gray-600">Пол:</span>
-                    <div className="font-semibold">
-                      {roomBooking.guestGender === "male"
-                        ? "Мужской"
-                        : "Женский"}
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <span className="font-medium text-gray-600">Пол:</span>
+                      <div className="font-semibold">
+                        {roomBooking.guestGender === "male"
+                          ? "Мужской"
+                          : "Женский"}
+                      </div>
                     </div>
+                    {roomBooking.status === "booked" && (
+                      <div>
+                        <span className="font-medium text-gray-600">
+                          Статус:
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <span className="font-semibold">
+                            {roomBooking.isConfirmed
+                              ? "Подтверждено"
+                              : "Не подтверждено"}
+                          </span>
+                          {roomBooking.isConfirmed && (
+                            <span className="text-green-600 text-lg">✓</span>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {roomBooking.voucherNumber && (
@@ -640,10 +660,10 @@ export default function BookingDetailsDialog({
                     <div className="flex items-center gap-2">
                       <Button
                         variant="outline"
-                        size="sm"
+                        size="xs"
                         onClick={() => onToggleConfirmation(roomBooking.id)}
                         className={cn(
-                          "flex items-center gap-2",
+                          "flex items-center gap-1 h-7 px-2 text-xs",
                           roomBooking.isConfirmed
                             ? "bg-green-100 border-green-500 text-green-700"
                             : "border-gray-300",
@@ -651,11 +671,11 @@ export default function BookingDetailsDialog({
                       >
                         {roomBooking.isConfirmed ? (
                           <>
-                            <span className="text-green-600 text-lg">✓</span>
-                            Подтверждено
+                            <span className="text-green-600">✓</span>
+                            <span>Подтверждено</span>
                           </>
                         ) : (
-                          "Подтвердить бронь"
+                          "Подтвердить"
                         )}
                       </Button>
                     </div>
