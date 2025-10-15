@@ -1253,6 +1253,84 @@ export default function BookingSystem() {
     setIsNewOrganizationDialogOpen(true);
   };
 
+  // Function to verify and fix guest-booking data integrity
+  const handleVerifyAndFixGuestData = () => {
+    console.log(
+      "[DATA-VERIFICATION] Starting guest and booking data verification...",
+    );
+
+    let fixedCount = 0;
+    let mergedGuestsCount = 0;
+    const guestMap = new Map<string, Guest>();
+    const phoneNameMap = new Map<string, string>(); // Map of "phone|fullName" -> guestId
+
+    // Step 1: Build a map of unique guests by phone + fullName
+    guests.forEach((guest) => {
+      const key = `${guest.phone.toLowerCase()}|${guest.fullName.toLowerCase()}`;
+
+      if (!phoneNameMap.has(key)) {
+        // First occurrence of this phone+name combination
+        phoneNameMap.set(key, guest.id);
+        guestMap.set(guest.id, guest);
+      } else {
+        // Duplicate found - we'll merge this later
+        mergedGuestsCount++;
+        console.log(
+          `[DATA-VERIFICATION] Found duplicate guest: ${guest.fullName} (${guest.phone})`,
+        );
+      }
+    });
+
+    // Step 2: Update all bookings to use the correct guest IDs
+    const updatedBookings = bookings.map((booking) => {
+      const key = `${booking.guestPhone.toLowerCase()}|${booking.guestName.toLowerCase()}`;
+      const correctGuestId = phoneNameMap.get(key);
+
+      if (correctGuestId && correctGuestId !== booking.guestId) {
+        fixedCount++;
+        console.log(
+          `[DATA-VERIFICATION] Fixed booking ${booking.id}: ${booking.guestId} -> ${correctGuestId}`,
+        );
+        return {
+          ...booking,
+          guestId: correctGuestId,
+        };
+      }
+
+      return booking;
+    });
+
+    // Step 3: Remove duplicate guests, keeping only the unique ones
+    const uniqueGuests = Array.from(guestMap.values());
+
+    // Step 4: Update state and localStorage
+    if (fixedCount > 0 || mergedGuestsCount > 0) {
+      setBookings(updatedBookings);
+      setGuests(uniqueGuests);
+      localStorage.setItem(
+        "sanatorium_bookings",
+        JSON.stringify(updatedBookings),
+      );
+      localStorage.setItem("sanatorium_guests", JSON.stringify(uniqueGuests));
+
+      alert(
+        `Проверка завершена!\n\n` +
+          `Исправлено бронирований: ${fixedCount}\n` +
+          `Объединено дубликатов гостей: ${mergedGuestsCount}\n` +
+          `Всего уникальных гостей: ${uniqueGuests.length}\n\n` +
+          `Данные успешно обновлены!`,
+      );
+    } else {
+      alert(
+        "Проверка завершена! Все данные корректны, исправлений не требуется.",
+      );
+    }
+
+    console.log(
+      `[DATA-VERIFICATION] Verification complete. Fixed: ${fixedCount}, Merged: ${mergedGuestsCount}`,
+    );
+  };
+
   const handleCreateGuest = (guestData: Omit<Guest, "id" | "createdAt">) => {
     const guestId = `guest-${Date.now()}`;
     const newGuest: Guest = {
@@ -5375,6 +5453,14 @@ export default function BookingSystem() {
                     >
                       <FileText className="w-4 h-4 mr-2" />
                       Журнал аудита
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="w-full border-purple-300 text-purple-700 hover:bg-purple-50"
+                      onClick={handleVerifyAndFixGuestData}
+                    >
+                      <Database className="w-4 h-4 mr-2" />
+                      Проверить данные
                     </Button>
                   </div>
                   <div className="bg-white/70 p-3 rounded-lg text-sm text-purple-700">
