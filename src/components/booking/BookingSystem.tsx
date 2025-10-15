@@ -1664,8 +1664,121 @@ export default function BookingSystem() {
   const reportStats = useMemo(() => {
     const reportDate = new Date(reportDateFrom);
     reportDate.setHours(0, 0, 0, 0);
-    return getStatsForDate(reportDate);
-  }, [roomsData, bookings, reportDateFrom]);
+
+    // Apply filters to rooms
+    let filteredRoomsForReport = roomsData;
+
+    if (reportBuilding !== "all") {
+      filteredRoomsForReport = filteredRoomsForReport.filter(
+        (r) =>
+          r.building === reportBuilding ||
+          (reportBuilding === "1" && r.building === "A") ||
+          (reportBuilding === "2" && r.building === "B"),
+      );
+    }
+
+    if (reportFloor !== "all") {
+      filteredRoomsForReport = filteredRoomsForReport.filter(
+        (r) => r.floor.toString() === reportFloor,
+      );
+    }
+
+    if (reportRoomType !== "all") {
+      filteredRoomsForReport = filteredRoomsForReport.filter(
+        (r) => r.type === reportRoomType,
+      );
+    }
+
+    // Calculate stats for filtered rooms
+    const total = filteredRoomsForReport.length;
+    let free = 0;
+    let occupied = 0;
+    let booked = 0;
+    let blocked = 0;
+    let freeBeds = 0;
+    let occupiedBeds = 0;
+    let bookedBeds = 0;
+    let totalBeds = 0;
+
+    filteredRoomsForReport.forEach((room) => {
+      totalBeds += room.capacity;
+      const status = computeRoomStatus(room, reportDate, bookings);
+
+      // Count current occupancy for this room
+      const occupiedBookings = bookings.filter(
+        (b) =>
+          b.roomId === room.id &&
+          b.status === "checked_in" &&
+          b.checkInDate <= reportDate &&
+          b.checkOutDate >= reportDate,
+      );
+
+      const bookedBookings = bookings.filter(
+        (b) =>
+          b.roomId === room.id &&
+          (b.status === "booked" || b.status === "confirmed") &&
+          b.checkInDate <= reportDate &&
+          b.checkOutDate >= reportDate,
+      );
+
+      const totalGuestsInRoom = occupiedBookings.length + bookedBookings.length;
+
+      switch (status) {
+        case "free":
+          free++;
+          freeBeds += room.capacity;
+          break;
+        case "occupied":
+          occupied++;
+          occupiedBeds += occupiedBookings.length;
+          freeBeds += room.capacity - totalGuestsInRoom;
+          break;
+        case "booked":
+          booked++;
+          bookedBeds += bookedBookings.length;
+          freeBeds += room.capacity - totalGuestsInRoom;
+          break;
+        case "blocked":
+          blocked++;
+          break;
+      }
+    });
+
+    const buildingA = filteredRoomsForReport.filter(
+      (r) => r.building === "1" || r.building === "A",
+    );
+    const buildingB = filteredRoomsForReport.filter(
+      (r) => r.building === "2" || r.building === "B",
+    );
+
+    const checkedInGuests = bookings.filter(
+      (b) =>
+        b.status === "checked_in" &&
+        filteredRoomsForReport.some((r) => r.id === b.roomId),
+    ).length;
+
+    return {
+      total,
+      available: free,
+      occupied,
+      booked,
+      blocked,
+      freeBeds,
+      occupiedBeds,
+      bookedBeds,
+      totalBeds,
+      buildingA: buildingA.length,
+      buildingB: buildingB.length,
+      checkedInGuests,
+    };
+  }, [
+    roomsData,
+    bookings,
+    reportDateFrom,
+    reportBuilding,
+    reportFloor,
+    reportRoomType,
+  ]);
 
   const handleExportReport = (
     reportType: "occupancy" | "guests" | "status_by_date",
