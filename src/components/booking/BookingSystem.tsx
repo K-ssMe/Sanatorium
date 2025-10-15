@@ -1062,6 +1062,18 @@ export default function BookingSystem() {
     });
   };
 
+  const handleToggleConfirmation = (bookingId: string) => {
+    setBookings((prevBookings) => {
+      const updated = prevBookings.map((booking) =>
+        booking.id === bookingId
+          ? { ...booking, isConfirmed: !booking.isConfirmed }
+          : booking,
+      );
+      localStorage.setItem("sanatorium_bookings", JSON.stringify(updated));
+      return updated;
+    });
+  };
+
   const handleCheckOut = (bookingId: string) => {
     const booking = bookings.find((b) => b.id === bookingId);
     if (booking) {
@@ -1184,11 +1196,16 @@ export default function BookingSystem() {
   const handleCheckIn = (bookingId: string) => {
     const booking = bookings.find((b) => b.id === bookingId);
     if (booking) {
-      // Update booking status to checked_in
+      // Update booking status to checked_in and remove confirmation
       setBookings((prevBookings) => {
         const updated = prevBookings.map((b) =>
           b.id === bookingId
-            ? { ...b, status: "checked_in", actualCheckInAt: new Date() }
+            ? {
+                ...b,
+                status: "checked_in",
+                actualCheckInAt: new Date(),
+                isConfirmed: false,
+              }
             : b,
         );
         localStorage.setItem("sanatorium_bookings", JSON.stringify(updated));
@@ -4808,25 +4825,33 @@ export default function BookingSystem() {
                                 )}
                               </TableCell>
                               <TableCell>
-                                <Badge
-                                  variant="outline"
-                                  className={cn(
-                                    isUncheckedIn &&
-                                      "bg-red-100 text-red-800 border-red-300",
-                                  )}
-                                >
-                                  {booking.status === "confirmed"
-                                    ? "Подтверждена"
-                                    : booking.status === "booked"
-                                      ? "Забронирована"
-                                      : booking.status === "checked_in"
-                                        ? "Заселен"
-                                        : booking.status === "completed"
-                                          ? "Завершена"
-                                          : booking.status === "cancelled"
-                                            ? "Отменена"
-                                            : booking.status}
-                                </Badge>
+                                <div className="flex items-center gap-2">
+                                  <Badge
+                                    variant="outline"
+                                    className={cn(
+                                      isUncheckedIn &&
+                                        "bg-red-100 text-red-800 border-red-300",
+                                    )}
+                                  >
+                                    {booking.status === "confirmed"
+                                      ? "Подтверждена"
+                                      : booking.status === "booked"
+                                        ? "Забронирована"
+                                        : booking.status === "checked_in"
+                                          ? "Заселен"
+                                          : booking.status === "completed"
+                                            ? "Завершена"
+                                            : booking.status === "cancelled"
+                                              ? "Отменена"
+                                              : booking.status}
+                                  </Badge>
+                                  {booking.status === "booked" &&
+                                    booking.isConfirmed && (
+                                      <span className="text-green-600 text-lg font-bold">
+                                        ✓
+                                      </span>
+                                    )}
+                                </div>
                               </TableCell>
                               <TableCell>
                                 {booking.voucherNumber || "-"}
@@ -5712,6 +5737,7 @@ export default function BookingSystem() {
               return updated;
             });
           }}
+          onToggleConfirmation={handleToggleConfirmation}
           rooms={roomsData}
           allBookings={bookings}
           currentDate={currentDate}
