@@ -895,17 +895,59 @@ export default function BookingSystem() {
   const handleBookRoom = (bookingData: Omit<Booking, "id" | "createdAt">) => {
     const bookingId = `booking-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-    // Check if guest already exists by phone OR passport
+    // Check if guest already exists by phone AND full name match
+    // This ensures we only reuse guest records for the SAME person
     const existingGuest = guests.find(
       (g) =>
-        g.phone === bookingData.guestPhone ||
-        g.passportNumber === bookingData.guestPassport,
+        g.phone === bookingData.guestPhone &&
+        g.fullName.toLowerCase() === bookingData.guestName.toLowerCase(),
     );
 
-    let guestId = bookingData.guestId;
+    let guestId: string;
 
-    // Always create new guest for new bookings to ensure proper guest tracking
-    if (!existingGuest) {
+    // Use existing guest if found (same person), otherwise create new guest
+    if (existingGuest) {
+      guestId = existingGuest.id;
+      console.debug(
+        "[SAFE-FIX] Using existing guest (same person):",
+        existingGuest,
+      );
+
+      // Only update guest information if there are meaningful changes
+      // This prevents overwriting data unnecessarily
+      const hasChanges =
+        existingGuest.age !== bookingData.guestAge ||
+        existingGuest.address !== bookingData.guestAddress ||
+        existingGuest.gender !== bookingData.guestGender ||
+        (bookingData.guestPassport &&
+          existingGuest.passportNumber !== bookingData.guestPassport);
+
+      if (hasChanges) {
+        const updatedGuest: Guest = {
+          ...existingGuest,
+          age: bookingData.guestAge,
+          address: bookingData.guestAddress,
+          gender: bookingData.guestGender,
+          passportNumber:
+            bookingData.guestPassport || existingGuest.passportNumber,
+          dateOfBirth: new Date(
+            new Date().getFullYear() - bookingData.guestAge,
+            0,
+            1,
+          ),
+        };
+
+        setGuests((prev) => {
+          const updated = prev.map((g) =>
+            g.id === existingGuest.id ? updatedGuest : g,
+          );
+          localStorage.setItem("sanatorium_guests", JSON.stringify(updated));
+          return updated;
+        });
+      }
+    } else {
+      // Create new guest with unique ID - this is a different person
+      guestId = `guest-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       const nameParts = bookingData.guestName.split(" ");
       const newGuest: Guest = {
         id: guestId,
@@ -925,15 +967,15 @@ export default function BookingSystem() {
         gender: bookingData.guestGender,
         createdAt: new Date(),
       };
-      console.debug("[SAFE-FIX] Creating new guest:", newGuest);
+      console.debug(
+        "[SAFE-FIX] Creating new guest (different person):",
+        newGuest,
+      );
       setGuests((prev) => {
         const updated = [...prev, newGuest];
         localStorage.setItem("sanatorium_guests", JSON.stringify(updated));
         return updated;
       });
-    } else {
-      guestId = existingGuest.id;
-      console.debug("[SAFE-FIX] Using existing guest:", existingGuest);
     }
 
     const newBooking: Booking = {
