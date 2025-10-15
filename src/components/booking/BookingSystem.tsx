@@ -1583,13 +1583,26 @@ export default function BookingSystem() {
       const status = computeRoomStatus(room, date, bookings);
 
       // Count current occupancy for this room
-      const roomOccupancy = bookings.filter(
+      // For occupied rooms, count checked_in bookings
+      const occupiedBookings = bookings.filter(
         (b) =>
           b.roomId === room.id &&
-          (b.status === "checked_in" || b.status === "booked") &&
+          b.status === "checked_in" &&
           b.checkInDate <= date &&
           b.checkOutDate >= date,
-      ).length;
+      );
+
+      // For booked rooms, count booked/confirmed bookings
+      const bookedBookings = bookings.filter(
+        (b) =>
+          b.roomId === room.id &&
+          (b.status === "booked" || b.status === "confirmed") &&
+          b.checkInDate <= date &&
+          b.checkOutDate >= date,
+      );
+
+      // Count total guests in this room (each booking = 1 guest)
+      const totalGuestsInRoom = occupiedBookings.length + bookedBookings.length;
 
       switch (status) {
         case "free":
@@ -1598,13 +1611,13 @@ export default function BookingSystem() {
           break;
         case "occupied":
           occupied++;
-          occupiedBeds += roomOccupancy;
-          freeBeds += room.capacity - roomOccupancy;
+          occupiedBeds += occupiedBookings.length;
+          freeBeds += room.capacity - totalGuestsInRoom;
           break;
         case "booked":
           booked++;
-          bookedBeds += roomOccupancy;
-          freeBeds += room.capacity - roomOccupancy;
+          bookedBeds += bookedBookings.length;
+          freeBeds += room.capacity - totalGuestsInRoom;
           break;
         case "blocked":
           blocked++;
