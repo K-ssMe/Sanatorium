@@ -58,6 +58,7 @@ interface BookingDetailsDialogProps {
   onOpenAddGuestDialog?: (room: Room) => void;
   onCheckIn?: (bookingId: string) => void;
   onCancelBooking?: (bookingId: string) => void;
+  onToggleConfirmation?: (bookingId: string) => void;
   rooms?: Room[];
   allBookings?: Booking[];
   currentDate?: Date;
@@ -78,6 +79,7 @@ export default function BookingDetailsDialog({
   onOpenAddGuestDialog = () => {},
   onCheckIn = () => {},
   onCancelBooking = () => {},
+  onToggleConfirmation = () => {},
   rooms = [],
   allBookings = [],
   currentDate = new Date(),
@@ -631,6 +633,31 @@ export default function BookingDetailsDialog({
                       <div className="font-semibold">
                         {roomBooking.voucherNumber}
                       </div>
+                    </div>
+                  )}
+
+                  {roomBooking.status === "booked" && (
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => onToggleConfirmation(roomBooking.id)}
+                        className={cn(
+                          "flex items-center gap-2",
+                          roomBooking.isConfirmed
+                            ? "bg-green-100 border-green-500 text-green-700"
+                            : "border-gray-300",
+                        )}
+                      >
+                        {roomBooking.isConfirmed ? (
+                          <>
+                            <span className="text-green-600 text-lg">✓</span>
+                            Подтверждено
+                          </>
+                        ) : (
+                          "Подтвердить бронь"
+                        )}
+                      </Button>
                     </div>
                   )}
 
