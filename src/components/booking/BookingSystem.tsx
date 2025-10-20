@@ -1913,9 +1913,8 @@ export default function BookingSystem() {
           );
         }).length;
 
-        // Calculate incoming (check-ins for next 7 days, starting from tomorrow)
-        const tomorrow = new Date(reportDate);
-        tomorrow.setDate(tomorrow.getDate() + 1);
+        // Calculate incoming - guests who are booked/confirmed but not yet checked in on the report date
+        // This includes all bookings that are scheduled to arrive (checkIn >= reportDate) for the next 7 days
         const next7Days = new Date(reportDate);
         next7Days.setDate(next7Days.getDate() + 7);
         const incoming = filteredBookingsForReport.filter((b) => {
@@ -1924,7 +1923,7 @@ export default function BookingSystem() {
 
           return (
             (b.status === "booked" || b.status === "confirmed") &&
-            checkIn >= tomorrow &&
+            checkIn >= reportDate &&
             checkIn <= next7Days
           );
         }).length;
