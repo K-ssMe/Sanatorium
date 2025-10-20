@@ -1896,32 +1896,47 @@ export default function BookingSystem() {
         break;
       case "status_by_date":
         const reportDate = filters?.date || new Date(reportDateFrom);
+        reportDate.setHours(0, 0, 0, 0);
 
-        // Calculate current occupancy
-        const currentOccupied = filteredBookingsForReport.filter(
-          (b) =>
+        // Calculate current occupancy - guests currently staying (checked_in only)
+        const currentOccupied = filteredBookingsForReport.filter((b) => {
+          const checkIn = new Date(b.checkInDate);
+          checkIn.setHours(0, 0, 0, 0);
+          const checkOut = new Date(b.checkOutDate);
+          checkOut.setHours(0, 0, 0, 0);
+
+          return (
             b.status === "checked_in" &&
-            b.checkInDate <= reportDate &&
-            b.checkOutDate > reportDate,
-        ).length;
+            checkIn <= reportDate &&
+            checkOut > reportDate
+          );
+        }).length;
 
-        // Calculate incoming (check-ins for next 7 days)
+        // Calculate incoming (check-ins for next 7 days, including today)
         const next7Days = new Date(reportDate);
         next7Days.setDate(next7Days.getDate() + 7);
-        const incoming = filteredBookingsForReport.filter(
-          (b) =>
-            (b.status === "booked" || b.status === "confirmed") &&
-            b.checkInDate > reportDate &&
-            b.checkInDate <= next7Days,
-        ).length;
+        const incoming = filteredBookingsForReport.filter((b) => {
+          const checkIn = new Date(b.checkInDate);
+          checkIn.setHours(0, 0, 0, 0);
 
-        // Calculate outgoing (check-outs for next 7 days)
-        const outgoing = filteredBookingsForReport.filter(
-          (b) =>
+          return (
+            (b.status === "booked" || b.status === "confirmed") &&
+            checkIn >= reportDate &&
+            checkIn <= next7Days
+          );
+        }).length;
+
+        // Calculate outgoing (check-outs for next 7 days, including today)
+        const outgoing = filteredBookingsForReport.filter((b) => {
+          const checkOut = new Date(b.checkOutDate);
+          checkOut.setHours(0, 0, 0, 0);
+
+          return (
             b.status === "checked_in" &&
-            b.checkOutDate > reportDate &&
-            b.checkOutDate <= next7Days,
-        ).length;
+            checkOut >= reportDate &&
+            checkOut <= next7Days
+          );
+        }).length;
 
         const totalAfterMovement = currentOccupied + incoming - outgoing;
 
@@ -1941,18 +1956,26 @@ export default function BookingSystem() {
             reportDate,
             filteredBookingsForReport,
           );
-          if (roomStatus === "free") {
-            roomTypeStats[typeKey].free += room.capacity;
-          } else {
-            const occupiedCount = filteredBookingsForReport.filter(
-              (b) =>
-                b.roomId === room.id &&
-                (b.status === "checked_in" || b.status === "booked") &&
-                b.checkInDate <= reportDate &&
-                b.checkOutDate > reportDate,
-            ).length;
-            roomTypeStats[typeKey].free += room.capacity - occupiedCount;
-          }
+
+          // Count occupied places in this room
+          const occupiedCount = filteredBookingsForReport.filter((b) => {
+            const checkIn = new Date(b.checkInDate);
+            checkIn.setHours(0, 0, 0, 0);
+            const checkOut = new Date(b.checkOutDate);
+            checkOut.setHours(0, 0, 0, 0);
+
+            return (
+              b.roomId === room.id &&
+              (b.status === "checked_in" ||
+                b.status === "booked" ||
+                b.status === "confirmed") &&
+              checkIn <= reportDate &&
+              checkOut > reportDate
+            );
+          }).length;
+
+          // Free places = capacity - occupied
+          roomTypeStats[typeKey].free += room.capacity - occupiedCount;
         });
 
         // Generate daily forecast for next 7 days
@@ -1960,27 +1983,44 @@ export default function BookingSystem() {
         for (let i = 1; i <= 7; i++) {
           const forecastDate = new Date(reportDate);
           forecastDate.setDate(forecastDate.getDate() + i);
+          forecastDate.setHours(0, 0, 0, 0);
 
-          const dayIncoming = filteredBookingsForReport.filter(
-            (b) =>
+          const dayIncoming = filteredBookingsForReport.filter((b) => {
+            const checkIn = new Date(b.checkInDate);
+            checkIn.setHours(0, 0, 0, 0);
+
+            return (
               (b.status === "booked" || b.status === "confirmed") &&
-              b.checkInDate.toDateString() === forecastDate.toDateString(),
-          ).length;
+              checkIn.getTime() === forecastDate.getTime()
+            );
+          }).length;
 
-          const dayOutgoing = filteredBookingsForReport.filter(
-            (b) =>
+          const dayOutgoing = filteredBookingsForReport.filter((b) => {
+            const checkOut = new Date(b.checkOutDate);
+            checkOut.setHours(0, 0, 0, 0);
+
+            return (
               b.status === "checked_in" &&
-              b.checkOutDate.toDateString() === forecastDate.toDateString(),
-          ).length;
+              checkOut.getTime() === forecastDate.getTime()
+            );
+          }).length;
 
           const previousDate = new Date(forecastDate);
           previousDate.setDate(previousDate.getDate() - 1);
-          const previousOccupied = filteredBookingsForReport.filter(
-            (b) =>
+          previousDate.setHours(0, 0, 0, 0);
+
+          const previousOccupied = filteredBookingsForReport.filter((b) => {
+            const checkIn = new Date(b.checkInDate);
+            checkIn.setHours(0, 0, 0, 0);
+            const checkOut = new Date(b.checkOutDate);
+            checkOut.setHours(0, 0, 0, 0);
+
+            return (
               b.status === "checked_in" &&
-              b.checkInDate <= previousDate &&
-              b.checkOutDate > previousDate,
-          ).length;
+              checkIn <= previousDate &&
+              checkOut > previousDate
+            );
+          }).length;
 
           const dayTotal = previousOccupied + dayIncoming - dayOutgoing;
 
