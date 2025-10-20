@@ -1896,63 +1896,129 @@ export default function BookingSystem() {
         break;
       case "status_by_date":
         const reportDate = filters?.date || new Date(reportDateFrom);
-        data = filteredRooms.map((room) => {
+
+        // Calculate current occupancy
+        const currentOccupied = filteredBookingsForReport.filter(
+          (b) =>
+            b.status === "checked_in" &&
+            b.checkInDate <= reportDate &&
+            b.checkOutDate > reportDate,
+        ).length;
+
+        // Calculate incoming (check-ins for next 7 days)
+        const next7Days = new Date(reportDate);
+        next7Days.setDate(next7Days.getDate() + 7);
+        const incoming = filteredBookingsForReport.filter(
+          (b) =>
+            (b.status === "booked" || b.status === "confirmed") &&
+            b.checkInDate > reportDate &&
+            b.checkInDate <= next7Days,
+        ).length;
+
+        // Calculate outgoing (check-outs for next 7 days)
+        const outgoing = filteredBookingsForReport.filter(
+          (b) =>
+            b.status === "checked_in" &&
+            b.checkOutDate > reportDate &&
+            b.checkOutDate <= next7Days,
+        ).length;
+
+        const totalAfterMovement = currentOccupied + incoming - outgoing;
+
+        // Calculate free places by room type
+        const roomTypeStats: {
+          [key: string]: { total: number; free: number };
+        } = {};
+        filteredRooms.forEach((room) => {
+          const typeKey = getRoomTypeText(room.type);
+          if (!roomTypeStats[typeKey]) {
+            roomTypeStats[typeKey] = { total: 0, free: 0 };
+          }
+          roomTypeStats[typeKey].total += room.capacity;
+
           const roomStatus = computeRoomStatus(
             room,
             reportDate,
             filteredBookingsForReport,
           );
-          const booking = filteredBookingsForReport.find(
-            (b) =>
-              b.roomId === room.id &&
-              b.checkInDate <= reportDate &&
-              b.checkOutDate >= reportDate &&
-              (b.status === "checked_in" ||
-                b.status === "booked" ||
-                b.status === "confirmed"),
-          );
-
-          let status = "Свободен";
-          let guestInfo = "";
-
-          if (booking) {
-            if (
-              booking.checkInDate.toDateString() === reportDate.toDateString()
-            ) {
-              status = "К заселению";
-            } else if (
-              booking.checkOutDate.toDateString() === reportDate.toDateString()
-            ) {
-              status = "На выселение";
-            } else if (booking.status === "checked_in") {
-              status = "Заселен";
-            } else {
-              status = "Забронирован";
-            }
-            guestInfo = booking.guestName;
-            if (booking.secondGuestName) {
-              guestInfo += ` + ${booking.secondGuestName}`;
-            }
-          } else if (roomStatus === "blocked") {
-            status = "Заблокирован";
+          if (roomStatus === "free") {
+            roomTypeStats[typeKey].free += room.capacity;
+          } else {
+            const occupiedCount = filteredBookingsForReport.filter(
+              (b) =>
+                b.roomId === room.id &&
+                (b.status === "checked_in" || b.status === "booked") &&
+                b.checkInDate <= reportDate &&
+                b.checkOutDate > reportDate,
+            ).length;
+            roomTypeStats[typeKey].free += room.capacity - occupiedCount;
           }
-
-          const activeBookings = filteredBookingsForReport.filter(
-            (b) =>
-              b.roomId === room.id &&
-              (b.status === "checked_in" || b.status === "booked"),
-          );
-
-          return {
-            Номер: room.number,
-            Тип: getRoomTypeText(room.type),
-            Статус: status,
-            Этаж: room.floor,
-            Корпус: room.building,
-            Гость: guestInfo,
-            Заполненность: `${activeBookings.length}/${room.capacity}`,
-          };
         });
+
+        // Generate daily forecast for next 7 days
+        const dailyForecast = [];
+        for (let i = 1; i <= 7; i++) {
+          const forecastDate = new Date(reportDate);
+          forecastDate.setDate(forecastDate.getDate() + i);
+
+          const dayIncoming = filteredBookingsForReport.filter(
+            (b) =>
+              (b.status === "booked" || b.status === "confirmed") &&
+              b.checkInDate.toDateString() === forecastDate.toDateString(),
+          ).length;
+
+          const dayOutgoing = filteredBookingsForReport.filter(
+            (b) =>
+              b.status === "checked_in" &&
+              b.checkOutDate.toDateString() === forecastDate.toDateString(),
+          ).length;
+
+          const previousDate = new Date(forecastDate);
+          previousDate.setDate(previousDate.getDate() - 1);
+          const previousOccupied = filteredBookingsForReport.filter(
+            (b) =>
+              b.status === "checked_in" &&
+              b.checkInDate <= previousDate &&
+              b.checkOutDate > previousDate,
+          ).length;
+
+          const dayTotal = previousOccupied + dayIncoming - dayOutgoing;
+
+          dailyForecast.push({
+            day: forecastDate.toLocaleDateString("ru-RU", { weekday: "long" }),
+            date: forecastDate.toLocaleDateString("ru-RU", {
+              day: "2-digit",
+              month: "2-digit",
+            }),
+            incoming: dayIncoming,
+            outgoing: dayOutgoing,
+            total: dayTotal,
+          });
+        }
+
+        data = [
+          {
+            Отчет: `Отчет по состоянию на ${reportDate.toLocaleDateString("ru-RU")}`,
+            Значение: "",
+          },
+          { Отчет: "", Значение: "" },
+          { Отчет: "Состоит", Значение: currentOccupied },
+          { Отчет: "Поступает", Значение: `+${incoming}` },
+          { Отчет: "Выезжает", Значение: `-${outgoing}` },
+          { Отчет: "Итого", Значение: `= ${totalAfterMovement}` },
+          { Отчет: "", Значение: "" },
+          { Отчет: "Свободных мест на утро:", Значение: "" },
+          ...Object.entries(roomTypeStats).map(([type, stats]) => ({
+            Отчет: type,
+            Значение: stats.free,
+          })),
+          { Отчет: "", Значение: "" },
+          { Отчет: "Прогноз на 7 дней:", Значение: "" },
+          ...dailyForecast.map((day) => ({
+            Отчет: `${day.day} ${day.date}`,
+            Значение: `+ ${day.incoming}  - ${day.outgoing}  = ${day.total}`,
+          })),
+        ];
         filename = `status_report_${reportDate.toISOString().split("T")[0]}`;
         break;
     }
@@ -5167,8 +5233,9 @@ export default function BookingSystem() {
                         </h4>
                       </div>
                       <p className="text-sm text-green-700 mb-4">
-                        Статус номеров на начальную дату периода: свободные,
-                        забронированные, заселенные, к заселению, на выселение
+                        Отчет с прогнозом на 7 дней: текущее состояние,
+                        свободные места по типам номеров, ежедневное движение
+                        гостей
                       </p>
                       <div className="flex gap-2">
                         <Button
