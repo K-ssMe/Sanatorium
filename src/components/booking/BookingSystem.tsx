@@ -1899,6 +1899,7 @@ export default function BookingSystem() {
         reportDate.setHours(0, 0, 0, 0);
 
         // Calculate current occupancy - guests currently staying (checked_in only)
+        // This is the number of guests who are already checked in and staying on the report date
         const currentOccupied = filteredBookingsForReport.filter((b) => {
           const checkIn = new Date(b.checkInDate);
           checkIn.setHours(0, 0, 0, 0);
@@ -1907,12 +1908,14 @@ export default function BookingSystem() {
 
           return (
             b.status === "checked_in" &&
-            checkIn <= reportDate &&
+            checkIn < reportDate &&
             checkOut > reportDate
           );
         }).length;
 
-        // Calculate incoming (check-ins for next 7 days, including today)
+        // Calculate incoming (check-ins for next 7 days, starting from tomorrow)
+        const tomorrow = new Date(reportDate);
+        tomorrow.setDate(tomorrow.getDate() + 1);
         const next7Days = new Date(reportDate);
         next7Days.setDate(next7Days.getDate() + 7);
         const incoming = filteredBookingsForReport.filter((b) => {
@@ -1921,19 +1924,19 @@ export default function BookingSystem() {
 
           return (
             (b.status === "booked" || b.status === "confirmed") &&
-            checkIn >= reportDate &&
+            checkIn >= tomorrow &&
             checkIn <= next7Days
           );
         }).length;
 
-        // Calculate outgoing (check-outs for next 7 days, including today)
+        // Calculate outgoing (check-outs for next 7 days, starting from tomorrow)
         const outgoing = filteredBookingsForReport.filter((b) => {
           const checkOut = new Date(b.checkOutDate);
           checkOut.setHours(0, 0, 0, 0);
 
           return (
             b.status === "checked_in" &&
-            checkOut >= reportDate &&
+            checkOut >= tomorrow &&
             checkOut <= next7Days
           );
         }).length;
