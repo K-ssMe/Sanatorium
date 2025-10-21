@@ -1599,24 +1599,39 @@ export default function BookingSystem() {
       totalBeds += room.capacity;
       const status = computeRoomStatus(room, date, bookings);
 
-      // Count current occupancy for this room
+      // Normalize date for accurate comparison
+      const normalizedDate = new Date(date);
+      normalizedDate.setHours(0, 0, 0, 0);
+
+      // Count current occupancy for this room - count actual guests (bookings)
       // For occupied rooms, count checked_in bookings
-      const occupiedBookings = bookings.filter(
-        (b) =>
-          b.roomId === room.id &&
-          b.status === "checked_in" &&
-          b.checkInDate <= date &&
-          b.checkOutDate >= date,
-      );
+      const occupiedBookings = bookings.filter((b) => {
+        if (b.roomId !== room.id || b.status !== "checked_in") {
+          return false;
+        }
+        const checkIn = new Date(b.checkInDate);
+        checkIn.setHours(0, 0, 0, 0);
+        const checkOut = new Date(b.checkOutDate);
+        checkOut.setHours(0, 0, 0, 0);
+        // Guest is present from check-in date until (but not including) check-out date
+        return checkIn <= normalizedDate && checkOut > normalizedDate;
+      });
 
       // For booked rooms, count booked/confirmed bookings
-      const bookedBookings = bookings.filter(
-        (b) =>
-          b.roomId === room.id &&
-          (b.status === "booked" || b.status === "confirmed") &&
-          b.checkInDate <= date &&
-          b.checkOutDate >= date,
-      );
+      const bookedBookings = bookings.filter((b) => {
+        if (
+          b.roomId !== room.id ||
+          !(b.status === "booked" || b.status === "confirmed")
+        ) {
+          return false;
+        }
+        const checkIn = new Date(b.checkInDate);
+        checkIn.setHours(0, 0, 0, 0);
+        const checkOut = new Date(b.checkOutDate);
+        checkOut.setHours(0, 0, 0, 0);
+        // Booking is active from check-in date until (but not including) check-out date
+        return checkIn <= normalizedDate && checkOut > normalizedDate;
+      });
 
       // Count total guests in this room (each booking = 1 guest)
       const totalGuestsInRoom = occupiedBookings.length + bookedBookings.length;
@@ -1628,13 +1643,17 @@ export default function BookingSystem() {
           break;
         case "occupied":
           occupied++;
+          // Count actual occupied places (each booking = 1 person)
           occupiedBeds += occupiedBookings.length;
-          freeBeds += room.capacity - totalGuestsInRoom;
+          // Free beds = total capacity minus all guests (occupied + booked)
+          freeBeds += Math.max(0, room.capacity - totalGuestsInRoom);
           break;
         case "booked":
           booked++;
+          // Count actual booked places (each booking = 1 person)
           bookedBeds += bookedBookings.length;
-          freeBeds += room.capacity - totalGuestsInRoom;
+          // Free beds = total capacity minus all guests (occupied + booked)
+          freeBeds += Math.max(0, room.capacity - totalGuestsInRoom);
           break;
         case "blocked":
           blocked++;
@@ -1721,22 +1740,41 @@ export default function BookingSystem() {
       totalBeds += room.capacity;
       const status = computeRoomStatus(room, reportDate, bookings);
 
-      // Count current occupancy for this room
-      const occupiedBookings = bookings.filter(
-        (b) =>
-          b.roomId === room.id &&
-          b.status === "checked_in" &&
-          b.checkInDate <= reportDate &&
-          b.checkOutDate >= reportDate,
-      );
+      // Normalize report date for accurate comparison
+      const normalizedReportDate = new Date(reportDate);
+      normalizedReportDate.setHours(0, 0, 0, 0);
 
-      const bookedBookings = bookings.filter(
-        (b) =>
-          b.roomId === room.id &&
-          (b.status === "booked" || b.status === "confirmed") &&
-          b.checkInDate <= reportDate &&
-          b.checkOutDate >= reportDate,
-      );
+      // Count current occupancy for this room - count actual guests (bookings)
+      const occupiedBookings = bookings.filter((b) => {
+        if (b.roomId !== room.id || b.status !== "checked_in") {
+          return false;
+        }
+        const checkIn = new Date(b.checkInDate);
+        checkIn.setHours(0, 0, 0, 0);
+        const checkOut = new Date(b.checkOutDate);
+        checkOut.setHours(0, 0, 0, 0);
+        // Guest is present from check-in date until (but not including) check-out date
+        return (
+          checkIn <= normalizedReportDate && checkOut > normalizedReportDate
+        );
+      });
+
+      const bookedBookings = bookings.filter((b) => {
+        if (
+          b.roomId !== room.id ||
+          !(b.status === "booked" || b.status === "confirmed")
+        ) {
+          return false;
+        }
+        const checkIn = new Date(b.checkInDate);
+        checkIn.setHours(0, 0, 0, 0);
+        const checkOut = new Date(b.checkOutDate);
+        checkOut.setHours(0, 0, 0, 0);
+        // Booking is active from check-in date until (but not including) check-out date
+        return (
+          checkIn <= normalizedReportDate && checkOut > normalizedReportDate
+        );
+      });
 
       const totalGuestsInRoom = occupiedBookings.length + bookedBookings.length;
 
@@ -1747,13 +1785,17 @@ export default function BookingSystem() {
           break;
         case "occupied":
           occupied++;
+          // Count actual occupied places (each booking = 1 person)
           occupiedBeds += occupiedBookings.length;
-          freeBeds += room.capacity - totalGuestsInRoom;
+          // Free beds = total capacity minus all guests (occupied + booked)
+          freeBeds += Math.max(0, room.capacity - totalGuestsInRoom);
           break;
         case "booked":
           booked++;
+          // Count actual booked places (each booking = 1 person)
           bookedBeds += bookedBookings.length;
-          freeBeds += room.capacity - totalGuestsInRoom;
+          // Free beds = total capacity minus all guests (occupied + booked)
+          freeBeds += Math.max(0, room.capacity - totalGuestsInRoom);
           break;
         case "blocked":
           blocked++;
@@ -1898,49 +1940,73 @@ export default function BookingSystem() {
         const reportDate = filters?.date || new Date(reportDateFrom);
         reportDate.setHours(0, 0, 0, 0);
 
-        // Calculate current occupancy - guests currently staying (checked_in only)
-        // This is the number of guests who are already checked in and staying on the report date
-        const currentOccupied = filteredBookingsForReport.filter((b) => {
-          const checkIn = new Date(b.checkInDate);
-          checkIn.setHours(0, 0, 0, 0);
-          const checkOut = new Date(b.checkOutDate);
-          checkOut.setHours(0, 0, 0, 0);
+        // Calculate total FREE places on the report date ("Состоит")
+        let totalFreePlaces = 0;
+        filteredRooms.forEach((room) => {
+          const normalizedReportDate = new Date(reportDate);
+          normalizedReportDate.setHours(0, 0, 0, 0);
 
-          return (
-            b.status === "checked_in" &&
-            checkIn < reportDate &&
-            checkOut > reportDate
-          );
-        }).length;
+          // Count occupied places in this room
+          const occupiedCount = filteredBookingsForReport.filter((b) => {
+            const checkIn = new Date(b.checkInDate);
+            checkIn.setHours(0, 0, 0, 0);
+            const checkOut = new Date(b.checkOutDate);
+            checkOut.setHours(0, 0, 0, 0);
 
-        // Calculate incoming - guests who are booked/confirmed but not yet checked in on the report date
-        // This includes all bookings that are scheduled to arrive (checkIn >= reportDate) for the next 7 days
-        const next7Days = new Date(reportDate);
-        next7Days.setDate(next7Days.getDate() + 7);
-        const incoming = filteredBookingsForReport.filter((b) => {
-          const checkIn = new Date(b.checkInDate);
-          checkIn.setHours(0, 0, 0, 0);
+            return (
+              b.roomId === room.id &&
+              (b.status === "checked_in" ||
+                b.status === "booked" ||
+                b.status === "confirmed") &&
+              checkIn <= normalizedReportDate &&
+              checkOut > normalizedReportDate
+            );
+          }).length;
 
-          return (
-            (b.status === "booked" || b.status === "confirmed") &&
-            checkIn >= reportDate &&
-            checkIn <= next7Days
-          );
-        }).length;
+          // Free places = capacity - occupied
+          totalFreePlaces += room.capacity - occupiedCount;
+        });
 
-        // Calculate outgoing (check-outs for next 7 days, starting from tomorrow)
+        // Calculate total occupied places ("Поступает" - incoming)
+        let totalOccupiedPlaces = 0;
+        filteredRooms.forEach((room) => {
+          const normalizedReportDate = new Date(reportDate);
+          normalizedReportDate.setHours(0, 0, 0, 0);
+
+          const occupiedCount = filteredBookingsForReport.filter((b) => {
+            const checkIn = new Date(b.checkInDate);
+            checkIn.setHours(0, 0, 0, 0);
+            const checkOut = new Date(b.checkOutDate);
+            checkOut.setHours(0, 0, 0, 0);
+
+            return (
+              b.roomId === room.id &&
+              (b.status === "checked_in" ||
+                b.status === "booked" ||
+                b.status === "confirmed") &&
+              checkIn <= normalizedReportDate &&
+              checkOut > normalizedReportDate
+            );
+          }).length;
+
+          totalOccupiedPlaces += occupiedCount;
+        });
+
+        // Calculate outgoing - guests checking out on the report date
         const outgoing = filteredBookingsForReport.filter((b) => {
           const checkOut = new Date(b.checkOutDate);
           checkOut.setHours(0, 0, 0, 0);
 
           return (
-            b.status === "checked_in" &&
-            checkOut >= tomorrow &&
-            checkOut <= next7Days
+            (b.status === "checked_in" ||
+              b.status === "booked" ||
+              b.status === "confirmed") &&
+            checkOut.getTime() === reportDate.getTime()
           );
         }).length;
 
-        const totalAfterMovement = currentOccupied + incoming - outgoing;
+        const totalAfterMovement =
+          totalFreePlaces + totalOccupiedPlaces - outgoing;
 
         // Calculate free places by room type
         const roomTypeStats: {
@@ -1980,51 +2046,60 @@ export default function BookingSystem() {
           roomTypeStats[typeKey].free += room.capacity - occupiedCount;
         });
 
-        // Generate daily forecast for next 7 days
+        // Generate daily forecast for next 7 days (including current date)
         const dailyForecast = [];
-        for (let i = 1; i <= 7; i++) {
+        for (let i = 0; i < 7; i++) {
           const forecastDate = new Date(reportDate);
           forecastDate.setDate(forecastDate.getDate() + i);
           forecastDate.setHours(0, 0, 0, 0);
 
+          // Count incoming guests - those checking in on this specific day
           const dayIncoming = filteredBookingsForReport.filter((b) => {
             const checkIn = new Date(b.checkInDate);
             checkIn.setHours(0, 0, 0, 0);
 
             return (
-              (b.status === "booked" || b.status === "confirmed") &&
+              (b.status === "booked" ||
+                b.status === "confirmed" ||
+                b.status === "checked_in") &&
               checkIn.getTime() === forecastDate.getTime()
             );
           }).length;
 
+          // Count outgoing guests - those checking out on this specific day
           const dayOutgoing = filteredBookingsForReport.filter((b) => {
             const checkOut = new Date(b.checkOutDate);
             checkOut.setHours(0, 0, 0, 0);
 
             return (
-              b.status === "checked_in" &&
+              (b.status === "checked_in" ||
+                b.status === "booked" ||
+                b.status === "confirmed") &&
               checkOut.getTime() === forecastDate.getTime()
             );
           }).length;
 
-          const previousDate = new Date(forecastDate);
-          previousDate.setDate(previousDate.getDate() - 1);
-          previousDate.setHours(0, 0, 0, 0);
+          // Calculate total FREE places for this day
+          let dayTotalFreePlaces = 0;
+          filteredRooms.forEach((room) => {
+            const occupiedCount = filteredBookingsForReport.filter((b) => {
+              const checkIn = new Date(b.checkInDate);
+              checkIn.setHours(0, 0, 0, 0);
+              const checkOut = new Date(b.checkOutDate);
+              checkOut.setHours(0, 0, 0, 0);
 
-          const previousOccupied = filteredBookingsForReport.filter((b) => {
-            const checkIn = new Date(b.checkInDate);
-            checkIn.setHours(0, 0, 0, 0);
-            const checkOut = new Date(b.checkOutDate);
-            checkOut.setHours(0, 0, 0, 0);
+              return (
+                b.roomId === room.id &&
+                (b.status === "checked_in" ||
+                  b.status === "booked" ||
+                  b.status === "confirmed") &&
+                checkIn <= forecastDate &&
+                checkOut > forecastDate
+              );
+            }).length;
 
-            return (
-              b.status === "checked_in" &&
-              checkIn <= previousDate &&
-              checkOut > previousDate
-            );
-          }).length;
-
-          const dayTotal = previousOccupied + dayIncoming - dayOutgoing;
+            dayTotalFreePlaces += room.capacity - occupiedCount;
+          });
 
           dailyForecast.push({
             day: forecastDate.toLocaleDateString("ru-RU", { weekday: "long" }),
@@ -2034,18 +2109,18 @@ export default function BookingSystem() {
             }),
             incoming: dayIncoming,
             outgoing: dayOutgoing,
-            total: dayTotal,
+            total: dayTotalFreePlaces,
           });
         }
 
         data = [
           {
-            Отчет: `Отчет по состоянию на ${reportDate.toLocaleDateString("ru-RU")}`,
+            Отчет: `Сводка на ${reportDate.toLocaleDateString("ru-RU")}`,
             Значение: "",
           },
           { Отчет: "", Значение: "" },
-          { Отчет: "Состоит", Значение: currentOccupied },
-          { Отчет: "Поступает", Значение: `+${incoming}` },
+          { Отчет: "Состоит", Значение: totalFreePlaces },
+          { Отчет: "Поступает", Значение: `+${totalOccupiedPlaces}` },
           { Отчет: "Выезжает", Значение: `-${outgoing}` },
           { Отчет: "Итого", Значение: `= ${totalAfterMovement}` },
           { Отчет: "", Значение: "" },
@@ -5432,7 +5507,7 @@ export default function BookingSystem() {
                             Всего номеров/мест
                           </div>
                           <div className="text-2xl font-bold text-purple-700">
-                            {roomsData.length}/{reportStats.totalBeds}
+                            {reportStats.total}/{reportStats.totalBeds}
                           </div>
                         </div>
                         <div className="bg-green-100/50 p-3 rounded">
