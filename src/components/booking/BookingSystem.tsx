@@ -2065,8 +2065,8 @@ export default function BookingSystem() {
             );
           }).length;
 
-          // Calculate total FREE places for this day
-          let dayTotalFreePlaces = 0;
+          // Calculate total OCCUPIED places for this day
+          let dayTotalOccupiedPlaces = 0;
           filteredRooms.forEach((room) => {
             const occupiedCount = filteredBookingsForReport.filter((b) => {
               const checkIn = new Date(b.checkInDate);
@@ -2084,8 +2084,17 @@ export default function BookingSystem() {
               );
             }).length;
 
-            dayTotalFreePlaces += room.capacity - occupiedCount;
+            dayTotalOccupiedPlaces += occupiedCount;
           });
+
+          // Calculate total capacity of all filtered rooms
+          const dayTotalCapacity = filteredRooms.reduce(
+            (sum, room) => sum + room.capacity,
+            0,
+          );
+
+          // Calculate free places: Total Capacity - Occupied Places
+          const dayTotalFreePlaces = dayTotalCapacity - dayTotalOccupiedPlaces;
 
           dailyForecast.push({
             day: forecastDate.toLocaleDateString("ru-RU", { weekday: "long" }),
