@@ -2045,18 +2045,21 @@ export default function BookingSystem() {
           forecastDate.setDate(forecastDate.getDate() + i);
           forecastDate.setHours(0, 0, 0, 0);
 
+          // Normalize forecast date for accurate comparison
+          const normalizedForecastDate = new Date(forecastDate);
+          normalizedForecastDate.setHours(0, 0, 0, 0);
+
           // Count incoming guests - those checking in on this specific day
           const dayIncoming = filteredBookingsForReport.filter((b) => {
             const checkIn = new Date(b.checkInDate);
             checkIn.setHours(0, 0, 0, 0);
-            const normalizedForecastDate = new Date(forecastDate);
-            normalizedForecastDate.setHours(0, 0, 0, 0);
 
             return (
               (b.status === "booked" ||
                 b.status === "confirmed" ||
                 b.status === "checked_in") &&
-              checkIn.getTime() === normalizedForecastDate.getTime()
+              checkIn.getTime() === normalizedForecastDate.getTime() &&
+              filteredRooms.some((r) => r.id === b.roomId)
             );
           }).length;
 
@@ -2064,14 +2067,13 @@ export default function BookingSystem() {
           const dayOutgoing = filteredBookingsForReport.filter((b) => {
             const checkOut = new Date(b.checkOutDate);
             checkOut.setHours(0, 0, 0, 0);
-            const normalizedForecastDate = new Date(forecastDate);
-            normalizedForecastDate.setHours(0, 0, 0, 0);
 
             return (
               (b.status === "checked_in" ||
                 b.status === "booked" ||
                 b.status === "confirmed") &&
-              checkOut.getTime() === normalizedForecastDate.getTime()
+              checkOut.getTime() === normalizedForecastDate.getTime() &&
+              filteredRooms.some((r) => r.id === b.roomId)
             );
           }).length;
 
@@ -2089,8 +2091,8 @@ export default function BookingSystem() {
                 (b.status === "checked_in" ||
                   b.status === "booked" ||
                   b.status === "confirmed") &&
-                checkIn <= forecastDate &&
-                checkOut > forecastDate
+                checkIn <= normalizedForecastDate &&
+                checkOut > normalizedForecastDate
               );
             }).length;
 
