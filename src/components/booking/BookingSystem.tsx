@@ -1940,8 +1940,8 @@ export default function BookingSystem() {
         const reportDate = filters?.date || new Date(reportDateFrom);
         reportDate.setHours(0, 0, 0, 0);
 
-        // Calculate total FREE places on the report date ("Состоит")
-        let totalFreePlaces = 0;
+        // Calculate total OCCUPIED places on the report date ("Состоит")
+        let totalOccupiedPlaces = 0;
         filteredRooms.forEach((room) => {
           const normalizedReportDate = new Date(reportDate);
           normalizedReportDate.setHours(0, 0, 0, 0);
@@ -1963,36 +1963,23 @@ export default function BookingSystem() {
             );
           }).length;
 
-          // Free places = capacity - occupied
-          totalFreePlaces += room.capacity - occupiedCount;
-        });
-
-        // Calculate total occupied places ("Поступает" - incoming)
-        let totalOccupiedPlaces = 0;
-        filteredRooms.forEach((room) => {
-          const normalizedReportDate = new Date(reportDate);
-          normalizedReportDate.setHours(0, 0, 0, 0);
-
-          const occupiedCount = filteredBookingsForReport.filter((b) => {
-            const checkIn = new Date(b.checkInDate);
-            checkIn.setHours(0, 0, 0, 0);
-            const checkOut = new Date(b.checkOutDate);
-            checkOut.setHours(0, 0, 0, 0);
-
-            return (
-              b.roomId === room.id &&
-              (b.status === "checked_in" ||
-                b.status === "booked" ||
-                b.status === "confirmed") &&
-              checkIn <= normalizedReportDate &&
-              checkOut > normalizedReportDate
-            );
-          }).length;
-
           totalOccupiedPlaces += occupiedCount;
         });
 
-        // Calculate outgoing - guests checking out on the report date
+        // Calculate incoming - guests checking in on the report date ("Поступает")
+        const incoming = filteredBookingsForReport.filter((b) => {
+          const checkIn = new Date(b.checkInDate);
+          checkIn.setHours(0, 0, 0, 0);
+
+          return (
+            (b.status === "checked_in" ||
+              b.status === "booked" ||
+              b.status === "confirmed") &&
+            checkIn.getTime() === reportDate.getTime()
+          );
+        }).length;
+
+        // Calculate outgoing - guests checking out on the report date ("Выезжает")
         const outgoing = filteredBookingsForReport.filter((b) => {
           const checkOut = new Date(b.checkOutDate);
           checkOut.setHours(0, 0, 0, 0);
@@ -2005,8 +1992,7 @@ export default function BookingSystem() {
           );
         }).length;
 
-        const totalAfterMovement =
-          totalFreePlaces + totalOccupiedPlaces - outgoing;
+        const totalAfterMovement = totalOccupiedPlaces + incoming - outgoing;
 
         // Calculate free places by room type
         const roomTypeStats: {
@@ -2119,8 +2105,8 @@ export default function BookingSystem() {
             Значение: "",
           },
           { Отчет: "", Значение: "" },
-          { Отчет: "Состоит", Значение: totalFreePlaces },
-          { Отчет: "Поступает", Значение: `+${totalOccupiedPlaces}` },
+          { Отчет: "Состоит", Значение: totalOccupiedPlaces },
+          { Отчет: "Поступает", Значение: `+${incoming}` },
           { Отчет: "Выезжает", Значение: `-${outgoing}` },
           { Отчет: "Итого", Значение: `= ${totalAfterMovement}` },
           { Отчет: "", Значение: "" },
