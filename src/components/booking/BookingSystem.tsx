@@ -2104,7 +2104,7 @@ export default function BookingSystem() {
             }),
             incoming: dayIncoming,
             outgoing: dayOutgoing,
-            total: dayTotalFreePlaces,
+            total: dayTotalOccupiedPlaces,
           });
         }
 
