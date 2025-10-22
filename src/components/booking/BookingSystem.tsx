@@ -1968,34 +1968,54 @@ export default function BookingSystem() {
 
         // Calculate incoming - guests checking in on the report date ("Поступает")
         // Only count bookings that are checking in on this specific date
-        const incoming = filteredBookingsForReport.filter((b) => {
+        const incoming = bookings.filter((b) => {
+          // Check if booking's room is in filtered rooms
+          if (!filteredRooms.some((r) => r.id === b.roomId)) {
+            return false;
+          }
+
+          // Check booking status
+          if (
+            b.status !== "booked" &&
+            b.status !== "confirmed" &&
+            b.status !== "checked_in"
+          ) {
+            return false;
+          }
+
+          // Check if check-in date matches report date
           const checkIn = new Date(b.checkInDate);
           checkIn.setHours(0, 0, 0, 0);
           const normalizedReportDate = new Date(reportDate);
           normalizedReportDate.setHours(0, 0, 0, 0);
 
-          return (
-            (b.status === "checked_in" ||
-              b.status === "booked" ||
-              b.status === "confirmed") &&
-            checkIn.getTime() === normalizedReportDate.getTime()
-          );
+          return checkIn.getTime() === normalizedReportDate.getTime();
         }).length;
 
         // Calculate outgoing - guests checking out on the report date ("Выезжает")
         // Count guests who are checking out on this date (their last day is the day before)
-        const outgoing = filteredBookingsForReport.filter((b) => {
+        const outgoing = bookings.filter((b) => {
+          // Check if booking's room is in filtered rooms
+          if (!filteredRooms.some((r) => r.id === b.roomId)) {
+            return false;
+          }
+
+          // Check booking status
+          if (
+            b.status !== "checked_in" &&
+            b.status !== "booked" &&
+            b.status !== "confirmed"
+          ) {
+            return false;
+          }
+
+          // Check if check-out date matches report date
           const checkOut = new Date(b.checkOutDate);
           checkOut.setHours(0, 0, 0, 0);
           const normalizedReportDate = new Date(reportDate);
           normalizedReportDate.setHours(0, 0, 0, 0);
 
-          return (
-            (b.status === "checked_in" ||
-              b.status === "booked" ||
-              b.status === "confirmed") &&
-            checkOut.getTime() === normalizedReportDate.getTime()
-          );
+          return checkOut.getTime() === normalizedReportDate.getTime();
         }).length;
 
         const totalAfterMovement = totalOccupiedPlaces + incoming - outgoing;
