@@ -2050,47 +2050,73 @@ export default function BookingSystem() {
           normalizedForecastDate.setHours(0, 0, 0, 0);
 
           // Count incoming guests - those checking in on this specific day
-          const dayIncoming = filteredBookingsForReport.filter((b) => {
+          const dayIncoming = bookings.filter((b) => {
+            // Check if booking's room is in filtered rooms
+            if (!filteredRooms.some((r) => r.id === b.roomId)) {
+              return false;
+            }
+
+            // Check booking status
+            if (
+              b.status !== "booked" &&
+              b.status !== "confirmed" &&
+              b.status !== "checked_in"
+            ) {
+              return false;
+            }
+
+            // Check if check-in date matches forecast date
             const checkIn = new Date(b.checkInDate);
             checkIn.setHours(0, 0, 0, 0);
 
-            return (
-              (b.status === "booked" ||
-                b.status === "confirmed" ||
-                b.status === "checked_in") &&
-              checkIn.getTime() === normalizedForecastDate.getTime() &&
-              filteredRooms.some((r) => r.id === b.roomId)
-            );
+            return checkIn.getTime() === normalizedForecastDate.getTime();
           }).length;
 
           // Count outgoing guests - those checking out on this specific day
-          const dayOutgoing = filteredBookingsForReport.filter((b) => {
+          const dayOutgoing = bookings.filter((b) => {
+            // Check if booking's room is in filtered rooms
+            if (!filteredRooms.some((r) => r.id === b.roomId)) {
+              return false;
+            }
+
+            // Check booking status
+            if (
+              b.status !== "checked_in" &&
+              b.status !== "booked" &&
+              b.status !== "confirmed"
+            ) {
+              return false;
+            }
+
+            // Check if check-out date matches forecast date
             const checkOut = new Date(b.checkOutDate);
             checkOut.setHours(0, 0, 0, 0);
 
-            return (
-              (b.status === "checked_in" ||
-                b.status === "booked" ||
-                b.status === "confirmed") &&
-              checkOut.getTime() === normalizedForecastDate.getTime() &&
-              filteredRooms.some((r) => r.id === b.roomId)
-            );
+            return checkOut.getTime() === normalizedForecastDate.getTime();
           }).length;
 
           // Calculate total OCCUPIED places for this day
           let dayTotalOccupiedPlaces = 0;
           filteredRooms.forEach((room) => {
-            const occupiedCount = filteredBookingsForReport.filter((b) => {
+            const occupiedCount = bookings.filter((b) => {
+              if (b.roomId !== room.id) {
+                return false;
+              }
+
+              if (
+                b.status !== "checked_in" &&
+                b.status !== "booked" &&
+                b.status !== "confirmed"
+              ) {
+                return false;
+              }
+
               const checkIn = new Date(b.checkInDate);
               checkIn.setHours(0, 0, 0, 0);
               const checkOut = new Date(b.checkOutDate);
               checkOut.setHours(0, 0, 0, 0);
 
               return (
-                b.roomId === room.id &&
-                (b.status === "checked_in" ||
-                  b.status === "booked" ||
-                  b.status === "confirmed") &&
                 checkIn <= normalizedForecastDate &&
                 checkOut > normalizedForecastDate
               );
