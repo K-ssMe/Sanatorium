@@ -1967,28 +1967,34 @@ export default function BookingSystem() {
         });
 
         // Calculate incoming - guests checking in on the report date ("Поступает")
+        // Only count bookings that are checking in on this specific date
         const incoming = filteredBookingsForReport.filter((b) => {
           const checkIn = new Date(b.checkInDate);
           checkIn.setHours(0, 0, 0, 0);
+          const normalizedReportDate = new Date(reportDate);
+          normalizedReportDate.setHours(0, 0, 0, 0);
 
           return (
             (b.status === "checked_in" ||
               b.status === "booked" ||
               b.status === "confirmed") &&
-            checkIn.getTime() === reportDate.getTime()
+            checkIn.getTime() === normalizedReportDate.getTime()
           );
         }).length;
 
         // Calculate outgoing - guests checking out on the report date ("Выезжает")
+        // Count guests who are checking out on this date (their last day is the day before)
         const outgoing = filteredBookingsForReport.filter((b) => {
           const checkOut = new Date(b.checkOutDate);
           checkOut.setHours(0, 0, 0, 0);
+          const normalizedReportDate = new Date(reportDate);
+          normalizedReportDate.setHours(0, 0, 0, 0);
 
           return (
             (b.status === "checked_in" ||
               b.status === "booked" ||
               b.status === "confirmed") &&
-            checkOut.getTime() === reportDate.getTime()
+            checkOut.getTime() === normalizedReportDate.getTime()
           );
         }).length;
 
@@ -2043,12 +2049,14 @@ export default function BookingSystem() {
           const dayIncoming = filteredBookingsForReport.filter((b) => {
             const checkIn = new Date(b.checkInDate);
             checkIn.setHours(0, 0, 0, 0);
+            const normalizedForecastDate = new Date(forecastDate);
+            normalizedForecastDate.setHours(0, 0, 0, 0);
 
             return (
               (b.status === "booked" ||
                 b.status === "confirmed" ||
                 b.status === "checked_in") &&
-              checkIn.getTime() === forecastDate.getTime()
+              checkIn.getTime() === normalizedForecastDate.getTime()
             );
           }).length;
 
@@ -2056,12 +2064,14 @@ export default function BookingSystem() {
           const dayOutgoing = filteredBookingsForReport.filter((b) => {
             const checkOut = new Date(b.checkOutDate);
             checkOut.setHours(0, 0, 0, 0);
+            const normalizedForecastDate = new Date(forecastDate);
+            normalizedForecastDate.setHours(0, 0, 0, 0);
 
             return (
               (b.status === "checked_in" ||
                 b.status === "booked" ||
                 b.status === "confirmed") &&
-              checkOut.getTime() === forecastDate.getTime()
+              checkOut.getTime() === normalizedForecastDate.getTime()
             );
           }).length;
 
