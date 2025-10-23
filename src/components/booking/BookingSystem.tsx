@@ -2172,9 +2172,26 @@ export default function BookingSystem() {
             Значение: "",
           },
           { Отчет: "", Значение: "" },
+          {
+            Отчет: "Всего номеров/мест",
+            Значение: `${filteredRooms.length}/${filteredRooms.reduce((sum, room) => sum + room.capacity, 0)}`,
+          },
+          {
+            Отчет: "Свободно",
+            Значение: `${reportStats.available}/${reportStats.freeBeds}`,
+          },
+          {
+            Отчет: "Занято",
+            Значение: `${reportStats.occupied}/${reportStats.occupiedBeds}`,
+          },
+          {
+            Отчет: "Забронировано",
+            Значение: `${reportStats.booked}/${reportStats.bookedBeds}`,
+          },
+          { Отчет: "Выезжает", Значение: `-${outgoing}` },
+          { Отчет: "", Значение: "" },
           { Отчет: "Состоит", Значение: totalOccupiedPlaces },
           { Отчет: "Поступает", Значение: `+${incoming}` },
-          { Отчет: "Выезжает", Значение: `-${outgoing}` },
           { Отчет: "Итого", Значение: `= ${totalAfterMovement}` },
           { Отчет: "", Значение: "" },
           { Отчет: "Свободных мест на утро:", Значение: "" },
@@ -5585,6 +5602,75 @@ export default function BookingSystem() {
                           </div>
                           <div className="text-2xl font-bold text-yellow-700">
                             {reportStats.booked}/{reportStats.bookedBeds}
+                          </div>
+                        </div>
+                        <div className="bg-orange-100/50 p-3 rounded">
+                          <div className="font-semibold text-orange-900">
+                            Выезжает
+                          </div>
+                          <div className="text-2xl font-bold text-orange-700">
+                            {(() => {
+                              const reportDate = new Date(reportDateFrom);
+                              reportDate.setHours(0, 0, 0, 0);
+
+                              // Apply filters to rooms
+                              let filteredRoomsForReport = roomsData;
+                              if (reportBuilding !== "all") {
+                                filteredRoomsForReport =
+                                  filteredRoomsForReport.filter(
+                                    (r) =>
+                                      r.building === reportBuilding ||
+                                      (reportBuilding === "1" &&
+                                        r.building === "A") ||
+                                      (reportBuilding === "2" &&
+                                        r.building === "B"),
+                                  );
+                              }
+                              if (reportFloor !== "all") {
+                                filteredRoomsForReport =
+                                  filteredRoomsForReport.filter(
+                                    (r) => r.floor.toString() === reportFloor,
+                                  );
+                              }
+                              if (reportRoomType !== "all") {
+                                filteredRoomsForReport =
+                                  filteredRoomsForReport.filter(
+                                    (r) => r.type === reportRoomType,
+                                  );
+                              }
+
+                              // Calculate outgoing guests
+                              const outgoingBookings = bookings.filter((b) => {
+                                if (
+                                  !filteredRoomsForReport.some(
+                                    (r) => r.id === b.roomId,
+                                  )
+                                ) {
+                                  return false;
+                                }
+                                if (
+                                  b.status !== "checked_in" &&
+                                  b.status !== "booked" &&
+                                  b.status !== "confirmed"
+                                ) {
+                                  return false;
+                                }
+                                const checkOut = new Date(b.checkOutDate);
+                                checkOut.setHours(0, 0, 0, 0);
+                                return (
+                                  checkOut.getTime() === reportDate.getTime()
+                                );
+                              });
+
+                              // Count unique rooms with departures
+                              const uniqueRooms = new Set(
+                                outgoingBookings.map((b) => b.roomId),
+                              );
+                              const outgoingRooms = uniqueRooms.size;
+                              const outgoingGuests = outgoingBookings.length;
+
+                              return `${outgoingRooms}/${outgoingGuests}`;
+                            })()}
                           </div>
                         </div>
                       </div>
