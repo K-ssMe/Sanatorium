@@ -145,9 +145,8 @@ export default function BookingSystem() {
   const [bookingCheckInDateFilter, setBookingCheckInDateFilter] =
     useState<Date | null>(null);
   const [bookingSortField, setBookingSortField] = useState<string | null>(null);
-  const [bookingSortDirection, setBookingSortDirection] = useState<
-    "asc" | "desc"
-  >("asc");
+  const [bookingSortDirection, setBookingSortDirection] =
+    useState<"asc" | "desc">("asc");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [roomsData, setRoomsData] = useState(() => {
@@ -1125,33 +1124,45 @@ export default function BookingSystem() {
     const newRoom = roomsData.find((r) => r.id === newRoomId);
 
     if (booking && newRoom) {
-      // Check if new room has available capacity
-      const newRoomStatus = computeRoomStatus(newRoom, currentDate, bookings);
-
-      // Count current occupancy in the new room
-      const currentOccupancy = bookings.filter(
-        (b) =>
-          b.roomId === newRoomId &&
-          b.id !== bookingId &&
-          (b.status === "checked_in" ||
-            b.status === "booked" ||
-            b.status === "confirmed") &&
-          b.checkInDate <= currentDate &&
-          b.checkOutDate >= currentDate,
-      ).length;
-
-      // Check if room is blocked
-      if (newRoomStatus === "blocked") {
+      // Check if new room is blocked
+      if (newRoom.blocked) {
         alert(
           `Номер ${newRoom.number} заблокирован и недоступен для перевода.`,
         );
         return;
       }
 
+      // Normalize booking dates for accurate comparison
+      const bookingCheckIn = new Date(booking.checkInDate);
+      bookingCheckIn.setHours(0, 0, 0, 0);
+      const bookingCheckOut = new Date(booking.checkOutDate);
+      bookingCheckOut.setHours(0, 0, 0, 0);
+
+      // Count current occupancy in the new room during the booking period
+      const currentOccupancy = bookings.filter((b) => {
+        if (
+          b.roomId !== newRoomId ||
+          b.id === bookingId || // Exclude the booking being transferred
+          b.status === "cancelled" ||
+          b.status === "completed"
+        ) {
+          return false;
+        }
+
+        // Check if bookings overlap
+        const bCheckIn = new Date(b.checkInDate);
+        bCheckIn.setHours(0, 0, 0, 0);
+        const bCheckOut = new Date(b.checkOutDate);
+        bCheckOut.setHours(0, 0, 0, 0);
+
+        // Bookings overlap if one starts before the other ends
+        return bCheckIn < bookingCheckOut && bCheckOut > bookingCheckIn;
+      }).length;
+
       // Check if there's available capacity
       if (currentOccupancy >= newRoom.capacity) {
         alert(
-          `Номер ${newRoom.number} полностью занят. Вместимость: ${newRoom.capacity}, занято: ${currentOccupancy}`,
+          `Номер ${newRoom.number} полностью занят на даты бронирования (${booking.checkInDate.toLocaleDateString("ru-RU")} - ${booking.checkOutDate.toLocaleDateString("ru-RU")}). Вместимость: ${newRoom.capacity}, занято: ${currentOccupancy}`,
         );
         return;
       }
@@ -1166,7 +1177,7 @@ export default function BookingSystem() {
       });
 
       alert(
-        `Гость ${booking.guestName} успешно переведен в номер ${newRoom.number}. Занято мест: ${currentOccupancy + 1}/${newRoom.capacity}`,
+        `Гость ${booking.guestName} успешно переведен в номер ${newRoom.number}. Занято мест на период бронирования: ${currentOccupancy + 1}/${newRoom.capacity}`,
       );
     }
   };
@@ -3151,7 +3162,6 @@ export default function BookingSystem() {
                         <Badge
                           variant="outline"
                           className={cn(
-                            "text-xs",
                             computeRoomStatus(room, new Date(), bookings) ===
                               "free" && "text-green-600",
                             computeRoomStatus(room, new Date(), bookings) ===
