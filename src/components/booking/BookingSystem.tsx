@@ -145,8 +145,9 @@ export default function BookingSystem() {
   const [bookingCheckInDateFilter, setBookingCheckInDateFilter] =
     useState<Date | null>(null);
   const [bookingSortField, setBookingSortField] = useState<string | null>(null);
-  const [bookingSortDirection, setBookingSortDirection] =
-    useState<"asc" | "desc">("asc");
+  const [bookingSortDirection, setBookingSortDirection] = useState<
+    "asc" | "desc"
+  >("asc");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [roomsData, setRoomsData] = useState(() => {
@@ -1122,8 +1123,9 @@ export default function BookingSystem() {
   const handleTransferRoom = (bookingId: string, newRoomId: string) => {
     const booking = bookings.find((b) => b.id === bookingId);
     const newRoom = roomsData.find((r) => r.id === newRoomId);
+    const oldRoom = roomsData.find((r) => r.id === booking?.roomId);
 
-    if (booking && newRoom) {
+    if (booking && newRoom && oldRoom) {
       // Check if new room is blocked
       if (newRoom.blocked) {
         alert(
@@ -1157,12 +1159,50 @@ export default function BookingSystem() {
 
         // Bookings overlap if one starts before the other ends
         return bCheckIn < bookingCheckOut && bCheckOut > bookingCheckIn;
-      }).length;
+      });
 
-      // Check if there's available capacity
-      if (currentOccupancy >= newRoom.capacity) {
+      // Check if this is a swap scenario (both rooms are single occupancy)
+      if (currentOccupancy.length >= newRoom.capacity) {
+        // Check if both rooms are single occupancy
+        if (
+          oldRoom.capacity === 1 &&
+          newRoom.capacity === 1 &&
+          currentOccupancy.length === 1
+        ) {
+          const targetBooking = currentOccupancy[0];
+
+          // Show confirmation dialog for swap
+          const confirmMessage = `Номер ${newRoom.number} занят гостем ${targetBooking.guestName}.\n\nВы хотите поменять гостей местами?\n\n${booking.guestName} (Номер ${oldRoom.number}) ↔ ${targetBooking.guestName} (Номер ${newRoom.number})`;
+
+          if (confirm(confirmMessage)) {
+            // Perform the swap
+            setBookings((prevBookings) => {
+              const updated = prevBookings.map((b) => {
+                if (b.id === booking.id) {
+                  return { ...b, roomId: newRoomId };
+                }
+                if (b.id === targetBooking.id) {
+                  return { ...b, roomId: oldRoom.id };
+                }
+                return b;
+              });
+              localStorage.setItem(
+                "sanatorium_bookings",
+                JSON.stringify(updated),
+              );
+              return updated;
+            });
+
+            alert(
+              `Гости успешно поменялись местами:\n${booking.guestName} → Номер ${newRoom.number}\n${targetBooking.guestName} → Номер ${oldRoom.number}`,
+            );
+          }
+          return;
+        }
+
+        // Not a swap scenario - show error
         alert(
-          `Номер ${newRoom.number} полностью занят на даты бронирования (${booking.checkInDate.toLocaleDateString("ru-RU")} - ${booking.checkOutDate.toLocaleDateString("ru-RU")}). Вместимость: ${newRoom.capacity}, занято: ${currentOccupancy}`,
+          `Номер ${newRoom.number} полностью занят на даты бронирования (${booking.checkInDate.toLocaleDateString("ru-RU")} - ${booking.checkOutDate.toLocaleDateString("ru-RU")}). Вместимость: ${newRoom.capacity}, занято: ${currentOccupancy.length}`,
         );
         return;
       }
@@ -1177,7 +1217,75 @@ export default function BookingSystem() {
       });
 
       alert(
-        `Гость ${booking.guestName} успешно переведен в номер ${newRoom.number}. Занято мест на период бронирования: ${currentOccupancy + 1}/${newRoom.capacity}`,
+        `Гость ${booking.guestName} успешно переведен в номер ${newRoom.number}. Занято мест на период бронирования: ${currentOccupancy.length + 1}/${newRoom.capacity}`,
+      );
+    }
+  };
+
+  const handleSwapRooms = (room1Id: string, room2Id: string) => {
+    const room1 = roomsData.find((r) => r.id === room1Id);
+    const room2 = roomsData.find((r) => r.id === room2Id);
+
+    if (!room1 || !room2) {
+      alert("Ошибка: не удалось найти номера для обмена");
+      return;
+    }
+
+    // Check if both rooms are single occupancy
+    if (room1.capacity !== 1 || room2.capacity !== 1) {
+      alert("Обмен возможен только между одноместными номерами");
+      return;
+    }
+
+    // Find active bookings for both rooms
+    const room1Bookings = bookings.filter(
+      (b) =>
+        b.roomId === room1Id &&
+        (b.status === "checked_in" ||
+          b.status === "booked" ||
+          b.status === "confirmed"),
+    );
+
+    const room2Bookings = bookings.filter(
+      (b) =>
+        b.roomId === room2Id &&
+        (b.status === "checked_in" ||
+          b.status === "booked" ||
+          b.status === "confirmed"),
+    );
+
+    // Check if both rooms have exactly one guest
+    if (room1Bookings.length !== 1 || room2Bookings.length !== 1) {
+      alert(
+        "Обмен возможен только если в каждом номере находится ровно один гость",
+      );
+      return;
+    }
+
+    const booking1 = room1Bookings[0];
+    const booking2 = room2Bookings[0];
+
+    // Show confirmation dialog
+    const confirmMessage = `Вы уверены, что хотите поменять гостей местами?\n\nНомер ${room1.number}: ${booking1.guestName}\n↔\nНомер ${room2.number}: ${booking2.guestName}\n\nОба гостя будут переселены в другие номера.`;
+
+    if (confirm(confirmMessage)) {
+      // Swap the room IDs in bookings
+      setBookings((prevBookings) => {
+        const updated = prevBookings.map((b) => {
+          if (b.id === booking1.id) {
+            return { ...b, roomId: room2Id };
+          }
+          if (b.id === booking2.id) {
+            return { ...b, roomId: room1Id };
+          }
+          return b;
+        });
+        localStorage.setItem("sanatorium_bookings", JSON.stringify(updated));
+        return updated;
+      });
+
+      alert(
+        `Гости успешно поменялись местами:\n${booking1.guestName} → Номер ${room2.number}\n${booking2.guestName} → Номер ${room1.number}`,
       );
     }
   };
@@ -4460,6 +4568,7 @@ export default function BookingSystem() {
                     guests={guests}
                     currentDate={currentDate}
                     organizations={organizations}
+                    onSwapRooms={handleSwapRooms}
                   />
                 ) : (
                   <CalendarView
