@@ -248,6 +248,7 @@ export default function BookingSystem() {
     useState(false);
   const [isBackupDialogOpen, setIsBackupDialogOpen] = useState(false);
   const [isAuditLogDialogOpen, setIsAuditLogDialogOpen] = useState(false);
+  const [isExportImportDialogOpen, setIsExportImportDialogOpen] = useState(false);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>(() => {
     const saved = localStorage.getItem("sanatorium_auditLogs");
     if (saved) {
@@ -1387,6 +1388,147 @@ export default function BookingSystem() {
 
   const handleAddNewOrganization = () => {
     setIsNewOrganizationDialogOpen(true);
+  };
+
+  // Backup and Restore Functions
+  const handleExportBackup = () => {
+    const backupData = {
+      version: "2.0.1",
+      exportDate: new Date().toISOString(),
+      bookings: bookings,
+      guests: guests,
+      rooms: roomsData,
+      organizations: organizations,
+      currentDate: currentDate.toISOString(),
+      auditHistory: auditHistory,
+      auditLogs: auditLogs,
+      roomTypes: roomTypes,
+    };
+
+    const dataStr = JSON.stringify(backupData, null, 2);
+    const dataBlob = new Blob([dataStr], { type: "application/json" });
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `sanatorium_backup_${new Date().toISOString().split("T")[0]}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+
+    alert("Резервная копия успешно создана!");
+  };
+
+  const handleImportBackup = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const backupData = JSON.parse(e.target?.result as string);
+
+        // Validate backup data
+        if (!backupData.version || !backupData.bookings || !backupData.guests) {
+          alert("Неверный формат файла резервной копии");
+          return;
+        }
+
+        // Confirm import
+        if (
+          !confirm(
+            `Вы уверены, что хотите восстановить данные из резервной копии от ${new Date(backupData.exportDate).toLocaleDateString("ru-RU")}?\n\nВсе текущие данные будут заменены!`
+          )
+        ) {
+          return;
+        }
+
+        // Parse dates in bookings
+        const parsedBookings = backupData.bookings.map((b: any) => ({
+          ...b,
+          checkInDate: new Date(b.checkInDate),
+          checkOutDate: new Date(b.checkOutDate),
+          createdAt: new Date(b.createdAt),
+          actualCheckInAt: b.actualCheckInAt ? new Date(b.actualCheckInAt) : undefined,
+          actualCheckOutAt: b.actualCheckOutAt ? new Date(b.actualCheckOutAt) : undefined,
+        }));
+
+        // Parse dates in guests
+        const parsedGuests = backupData.guests.map((g: any) => ({
+          ...g,
+          dateOfBirth: new Date(g.dateOfBirth),
+          createdAt: new Date(g.createdAt),
+        }));
+
+        // Parse dates in rooms
+        const parsedRooms = backupData.rooms.map((r: any) => ({
+          ...r,
+          blockedAt: r.blockedAt ? new Date(r.blockedAt) : undefined,
+        }));
+
+        // Parse dates in organizations
+        const parsedOrganizations = backupData.organizations.map((o: any) => ({
+          ...o,
+          createdAt: new Date(o.createdAt),
+        }));
+
+        // Parse dates in audit history
+        const parsedAuditHistory = backupData.auditHistory.map((audit: any) => ({
+          ...audit,
+          date: new Date(audit.date),
+          bookings: audit.bookings.map((b: any) => ({
+            ...b,
+            checkInDate: new Date(b.checkInDate),
+            checkOutDate: new Date(b.checkOutDate),
+            createdAt: new Date(b.createdAt),
+            actualCheckInAt: b.actualCheckInAt ? new Date(b.actualCheckInAt) : undefined,
+            actualCheckOutAt: b.actualCheckOutAt ? new Date(b.actualCheckOutAt) : undefined,
+          })),
+          rooms: audit.rooms.map((r: any) => ({
+            ...r,
+            blockedAt: r.blockedAt ? new Date(r.blockedAt) : undefined,
+          })),
+        }));
+
+        // Parse dates in audit logs
+        const parsedAuditLogs = backupData.auditLogs.map((log: any) => ({
+          ...log,
+          dateRun: new Date(log.dateRun),
+          createdAt: new Date(log.createdAt),
+        }));
+
+        // Parse dates in room types
+        const parsedRoomTypes = backupData.roomTypes.map((rt: any) => ({
+          ...rt,
+          createdAt: new Date(rt.createdAt),
+        }));
+
+        // Restore data
+        setBookings(parsedBookings);
+        setGuests(parsedGuests);
+        setRoomsData(parsedRooms);
+        setOrganizations(parsedOrganizations);
+        setCurrentDate(new Date(backupData.currentDate));
+        setAuditHistory(parsedAuditHistory);
+        setAuditLogs(parsedAuditLogs);
+        setRoomTypes(parsedRoomTypes);
+
+        // Save to localStorage
+        localStorage.setItem("sanatorium_bookings", JSON.stringify(parsedBookings));
+        localStorage.setItem("sanatorium_guests", JSON.stringify(parsedGuests));
+        localStorage.setItem("sanatorium_rooms", JSON.stringify(parsedRooms));
+        localStorage.setItem("sanatorium_organizations", JSON.stringify(parsedOrganizations));
+        localStorage.setItem("sanatorium_currentDate", backupData.currentDate);
+        localStorage.setItem("sanatorium_auditHistory", JSON.stringify(parsedAuditHistory));
+        localStorage.setItem("sanatorium_auditLogs", JSON.stringify(parsedAuditLogs));
+        localStorage.setItem("sanatorium_roomTypes", JSON.stringify(parsedRoomTypes));
+
+        alert("Данные успешно восстановлены из резервной копии!");
+        setIsExportImportDialogOpen(false);
+      } catch (error) {
+        console.error("Error importing backup:", error);
+        alert("Ошибка при импорте резервной копии. Проверьте формат файла.");
+      }
+    };
+    reader.readAsText(file);
   };
 
   // Function to verify and fix guest-booking data integrity
@@ -4044,6 +4186,97 @@ export default function BookingSystem() {
     );
   };
 
+  // Export/Import Dialog Component
+  const ExportImportDialog = ({
+    isOpen,
+    onClose,
+  }: {
+    isOpen: boolean;
+    onClose: () => void;
+  }) => {
+    const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+    return (
+      <Dialog open={isOpen} onOpenChange={onClose}>
+        <DialogContent className="max-w-md bg-gradient-to-br from-purple-50 to-violet-50 border-purple-200">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-purple-800">
+              <Database className="w-6 h-6" />
+              Резервное копирование
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-6">
+            <div className="bg-white/70 p-4 rounded-lg">
+              <h4 className="font-semibold text-purple-800 mb-3">
+                Экспорт данных
+              </h4>
+              <p className="text-sm text-purple-700 mb-4">
+                Создайте резервную копию всех данных системы: гостей, броней,
+                номеров и настроек.
+              </p>
+              <Button
+                className="w-full bg-purple-600 hover:bg-purple-700 text-white"
+                onClick={handleExportBackup}
+              >
+                <Database className="w-4 h-4 mr-2" />
+                Экспортировать данные
+              </Button>
+            </div>
+
+            <div className="bg-white/70 p-4 rounded-lg">
+              <h4 className="font-semibold text-purple-800 mb-3">
+                Импорт данных
+              </h4>
+              <p className="text-sm text-purple-700 mb-4">
+                Восстановите данные из ранее созданной резервной копии.
+                <span className="block mt-2 text-red-600 font-medium">
+                  Внимание: все текущие данные будут заменены!
+                </span>
+              </p>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".json"
+                onChange={handleImportBackup}
+                className="hidden"
+              />
+              <Button
+                variant="outline"
+                className="w-full border-purple-300 text-purple-700 hover:bg-purple-50"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Database className="w-4 h-4 mr-2" />
+                Импортировать данные
+              </Button>
+            </div>
+
+            <div className="bg-purple-100/50 p-3 rounded-lg text-sm text-purple-700">
+              <p>
+                <strong>Текущая дата системы:</strong>{" "}
+                {currentDate.toLocaleDateString("ru-RU")}
+              </p>
+              <p>
+                <strong>Всего броней:</strong> {bookings.length}
+              </p>
+              <p>
+                <strong>Всего гостей:</strong> {guests.length}
+              </p>
+              <p>
+                <strong>Всего номеров:</strong> {roomsData.length}
+              </p>
+            </div>
+
+            <div className="flex justify-end">
+              <Button variant="outline" onClick={onClose}>
+                Закрыть
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  };
+
   // Audit Calendar Popup Component
   const AuditCalendarPopup = ({
     auditHistory,
@@ -6312,6 +6545,12 @@ export default function BookingSystem() {
           </DialogContent>
         </Dialog>
 
+        {/* Export/Import Dialog */}
+        <ExportImportDialog
+          isOpen={isExportImportDialogOpen}
+          onClose={() => setIsExportImportDialogOpen(false)}
+        />
+
         {/* Simple Settings Dialogs */}
         {/* Enhanced Room Editing Dialog */}
         <Dialog
@@ -6427,6 +6666,62 @@ export default function BookingSystem() {
                 className="w-full"
               >
                 Закрыть
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Backup and Restore Dialog */}
+        <Dialog
+          open={isBackupDialogOpen}
+          onOpenChange={setIsBackupDialogOpen}
+        >
+          <DialogContent className="max-w-md bg-white">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-purple-800">
+                <Database className="w-6 h-6" />
+                Резервное копирование
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <p className="text-gray-600">
+                Функция резервного копирования и восстановления данных
+              </p>
+              <div className="bg-purple-50 p-4 rounded-lg">
+                <h4 className="font-medium text-purple-800 mb-2">
+                  Доступные функции:
+                </h4>
+                <ul className="text-sm text-purple-700 space-y-1">
+                  <li>
+                    • <strong>Экспорт данных</strong> - создание резервной копии
+                  </li>
+                  <li>
+                    • <strong>Импорт данных</strong> - восстановление из резервной копии
+                  </li>
+                  <li>
+                    • <strong>Проверка данных</strong> - автоматическая проверка целостности
+                  </li>
+                </ul>
+              </div>
+              <Button
+                className="w-full bg-purple-600 hover:bg-purple-700"
+                onClick={handleExportBackup}
+              >
+                Экспортировать данные
+              </Button>
+              <Button
+                variant="outline"
+                className="w-full border-purple-300 text-purple-700 hover:bg-purple-50"
+                onClick={() => setIsExportImportDialogOpen(true)}
+              >
+                Импортировать данные
+              </Button>
+              <Button
+                variant="outline"
+                className="w-full border-purple-300 text-purple-700 hover:bg-purple-50"
+                onClick={handleVerifyAndFixGuestData}
+              >
+                Проверить данные
               </Button>
             </div>
           </DialogContent>
