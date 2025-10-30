@@ -41,6 +41,7 @@ interface RoomGridProps {
   onDateSelection?: (room: Room, dates: Date[]) => void;
   currentDate?: Date;
   organizations?: Organization[];
+  onSwapRooms?: (room1Id: string, room2Id: string) => void;
 }
 
 const getRoomStatusColor = (
@@ -116,6 +117,7 @@ export default function RoomGrid({
   onDateSelection = () => {},
   currentDate = new Date(),
   organizations = [],
+  onSwapRooms = () => {},
 }: RoomGridProps) {
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectionStart, setSelectionStart] = useState<{
@@ -197,13 +199,31 @@ export default function RoomGrid({
     onContextMenuAction(action, room, booking);
   };
 
-  // Get bookings for room to show in context menu
+  // Get bookings for room to show in context menu - ONLY CURRENT GUESTS
   const getRoomBookings = (roomId: string) => {
-    return bookings.filter(
-      (booking) =>
-        booking.roomId === roomId &&
-        (booking.status === "checked_in" || booking.status === "booked"),
-    );
+    // Normalize current date for accurate comparison
+    const today = new Date(currentDate);
+    today.setHours(0, 0, 0, 0);
+
+    return bookings.filter((booking) => {
+      if (booking.roomId !== roomId) {
+        return false;
+      }
+
+      // Only show checked-in guests (actively staying in the room)
+      if (booking.status !== "checked_in") {
+        return false;
+      }
+
+      // Check if guest is currently in the room (between check-in and check-out dates)
+      const checkIn = new Date(booking.checkInDate);
+      checkIn.setHours(0, 0, 0, 0);
+      const checkOut = new Date(booking.checkOutDate);
+      checkOut.setHours(0, 0, 0, 0);
+
+      // Guest is present from check-in date until (but not including) check-out date
+      return checkIn <= today && checkOut > today;
+    });
   };
 
   // Handle room double click
@@ -478,6 +498,48 @@ export default function RoomGrid({
                     <UserPlus className="w-4 h-4" />
                     {room.blocked ? "Разблокировать" : "Заблокировать"}
                   </ContextMenuItem>
+                  {(() => {
+                    // Check if this room is single occupancy and occupied
+                    const isOccupied = roomBookings.length === 1;
+                    const isSingle = room.capacity === 1;
+
+                    if (
+                      isOccupied &&
+                      isSingle &&
+                      selectedRoom &&
+                      selectedRoom.id !== room.id
+                    ) {
+                      // Check if selected room is also single and occupied
+                      const selectedRoomBookings = bookings.filter(
+                        (b) =>
+                          b.roomId === selectedRoom.id &&
+                          (b.status === "checked_in" || b.status === "booked"),
+                      );
+                      const isSelectedOccupied =
+                        selectedRoomBookings.length === 1;
+                      const isSelectedSingle = selectedRoom.capacity === 1;
+
+                      if (isSelectedOccupied && isSelectedSingle) {
+                        return (
+                          <>
+                            <ContextMenuSeparator />
+                            <ContextMenuItem
+                              onClick={() => {
+                                if (onSwapRooms) {
+                                  onSwapRooms(selectedRoom.id, room.id);
+                                }
+                              }}
+                              className="flex items-center gap-2 cursor-pointer bg-blue-50 text-blue-700"
+                            >
+                              <UserPlus className="w-4 h-4" />
+                              Поменять местами с номером {selectedRoom.number}
+                            </ContextMenuItem>
+                          </>
+                        );
+                      }
+                    }
+                    return null;
+                  })()}
                 </ContextMenuContent>
               </ContextMenu>
             );
