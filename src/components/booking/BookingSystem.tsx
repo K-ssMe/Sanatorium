@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import {
   Room,
   Booking,
@@ -4194,7 +4194,7 @@ export default function BookingSystem() {
     isOpen: boolean;
     onClose: () => void;
   }) => {
-    const fileInputRef = React.useRef<HTMLInputElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     return (
       <Dialog open={isOpen} onOpenChange={onClose}>
