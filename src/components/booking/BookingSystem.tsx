@@ -5993,7 +5993,7 @@ export default function BookingSystem() {
                                   );
                               }
 
-                              // Count occupied rooms and beds (bookings that started BEFORE selected date)
+                              // Count all occupied rooms and beds (all active bookings before selected date)
                               let occupiedRooms = 0;
                               let occupiedBeds = 0;
 
@@ -6003,7 +6003,7 @@ export default function BookingSystem() {
                                 );
                                 normalizedReportDate.setHours(0, 0, 0, 0);
 
-                                // Count all bookings that started BEFORE the report date and are still active
+                                // Count all bookings that are active before the report date
                                 const activeBookings = bookings.filter((b) => {
                                   if (b.roomId !== room.id) return false;
 
@@ -6013,14 +6013,14 @@ export default function BookingSystem() {
                                   checkOut.setHours(0, 0, 0, 0);
 
                                   // Include all bookings (checked_in, booked, confirmed) that:
-                                  // - Started BEFORE the report date (not including the report date)
-                                  // - Haven't checked out yet
+                                  // - Started before the report date
+                                  // - Haven't checked out before the report date
                                   return (
                                     (b.status === "checked_in" ||
                                       b.status === "booked" ||
                                       b.status === "confirmed") &&
                                     checkIn < normalizedReportDate &&
-                                    checkOut > normalizedReportDate
+                                    checkOut >= normalizedReportDate
                                   );
                                 });
 
@@ -6069,7 +6069,7 @@ export default function BookingSystem() {
                                   );
                               }
 
-                              // Count only bookings that are active on the selected date
+                              // Count only bookings that start on the selected date
                               let bookedRooms = 0;
                               let bookedBeds = 0;
 
@@ -6079,7 +6079,7 @@ export default function BookingSystem() {
                                 );
                                 normalizedReportDate.setHours(0, 0, 0, 0);
 
-                                // Count all bookings (booked/confirmed) that are active on the report date
+                                // Count bookings that start exactly on the selected date
                                 const bookedBookings = bookings.filter((b) => {
                                   if (b.roomId !== room.id) return false;
                                   if (
@@ -6090,14 +6090,11 @@ export default function BookingSystem() {
 
                                   const checkIn = new Date(b.checkInDate);
                                   checkIn.setHours(0, 0, 0, 0);
-                                  const checkOut = new Date(b.checkOutDate);
-                                  checkOut.setHours(0, 0, 0, 0);
 
-                                  // Count bookings that are active on the selected date
-                                  // (regardless of when they were created)
+                                  // Only count bookings that start on the selected date
                                   return (
-                                    checkIn <= normalizedReportDate &&
-                                    checkOut > normalizedReportDate
+                                    checkIn.getTime() ===
+                                    normalizedReportDate.getTime()
                                   );
                                 });
 
