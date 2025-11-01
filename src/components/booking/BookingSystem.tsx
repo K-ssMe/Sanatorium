@@ -5924,14 +5924,6 @@ export default function BookingSystem() {
                         {new Date(reportDateFrom).toLocaleDateString("ru-RU")}
                       </h4>
                       <div className="grid grid-cols-2 gap-4 text-sm">
-                        <div className="bg-purple-100/50 p-3 rounded">
-                          <div className="font-semibold text-purple-900">
-                            Всего номеров/мест
-                          </div>
-                          <div className="text-2xl font-bold text-purple-700">
-                            {reportStats.total}/{reportStats.totalBeds}
-                          </div>
-                        </div>
                         <div className="bg-green-100/50 p-3 rounded">
                           <div className="font-semibold text-green-900">
                             Свободно
@@ -5945,7 +5937,72 @@ export default function BookingSystem() {
                             Занято
                           </div>
                           <div className="text-2xl font-bold text-red-700">
-                            {reportStats.occupied}/{reportStats.occupiedBeds}
+                            {(() => {
+                              const reportDate = new Date(reportDateFrom);
+                              reportDate.setHours(0, 0, 0, 0);
+
+                              // Apply filters to rooms
+                              let filteredRoomsForReport = roomsData;
+                              if (reportBuilding !== "all") {
+                                filteredRoomsForReport =
+                                  filteredRoomsForReport.filter(
+                                    (r) =>
+                                      r.building === reportBuilding ||
+                                      (reportBuilding === "1" &&
+                                        r.building === "A") ||
+                                      (reportBuilding === "2" &&
+                                        r.building === "B"),
+                                  );
+                              }
+                              if (reportFloor !== "all") {
+                                filteredRoomsForReport =
+                                  filteredRoomsForReport.filter(
+                                    (r) => r.floor.toString() === reportFloor,
+                                  );
+                              }
+                              if (reportRoomType !== "all") {
+                                filteredRoomsForReport =
+                                  filteredRoomsForReport.filter(
+                                    (r) => r.type === reportRoomType,
+                                  );
+                              }
+
+                              // Count occupied rooms and beds (checked_in + booked + confirmed before selected date)
+                              let occupiedRooms = 0;
+                              let occupiedBeds = 0;
+
+                              filteredRoomsForReport.forEach((room) => {
+                                const normalizedReportDate = new Date(reportDate);
+                                normalizedReportDate.setHours(0, 0, 0, 0);
+
+                                // Count all bookings that are active on the report date
+                                const activeBookings = bookings.filter((b) => {
+                                  if (b.roomId !== room.id) return false;
+                                  
+                                  const checkIn = new Date(b.checkInDate);
+                                  checkIn.setHours(0, 0, 0, 0);
+                                  const checkOut = new Date(b.checkOutDate);
+                                  checkOut.setHours(0, 0, 0, 0);
+
+                                  // Include all bookings that started before or on the report date
+                                  // and haven't checked out yet
+                                  return (
+                                    (b.status === "checked_in" ||
+                                      b.status === "booked" ||
+                                      b.status === "confirmed") &&
+                                    checkIn <= normalizedReportDate &&
+                                    checkOut > normalizedReportDate
+                                  );
+                                });
+
+                                if (activeBookings.length > 0) {
+                                  occupiedRooms++;
+                                  occupiedBeds += activeBookings.length;
+                                }
+                              });
+
+                              return `${occupiedRooms}/${occupiedBeds}`;
+                            })()}
                           </div>
                         </div>
                         <div className="bg-yellow-100/50 p-3 rounded">
@@ -5953,7 +6010,69 @@ export default function BookingSystem() {
                             Забронировано
                           </div>
                           <div className="text-2xl font-bold text-yellow-700">
-                            {reportStats.booked}/{reportStats.bookedBeds}
+                            {(() => {
+                              const reportDate = new Date(reportDateFrom);
+                              reportDate.setHours(0, 0, 0, 0);
+
+                              // Apply filters to rooms
+                              let filteredRoomsForReport = roomsData;
+                              if (reportBuilding !== "all") {
+                                filteredRoomsForReport =
+                                  filteredRoomsForReport.filter(
+                                    (r) =>
+                                      r.building === reportBuilding ||
+                                      (reportBuilding === "1" &&
+                                        r.building === "A") ||
+                                      (reportBuilding === "2" &&
+                                        r.building === "B"),
+                                  );
+                              }
+                              if (reportFloor !== "all") {
+                                filteredRoomsForReport =
+                                  filteredRoomsForReport.filter(
+                                    (r) => r.floor.toString() === reportFloor,
+                                  );
+                              }
+                              if (reportRoomType !== "all") {
+                                filteredRoomsForReport =
+                                  filteredRoomsForReport.filter(
+                                    (r) => r.type === reportRoomType,
+                                  );
+                              }
+
+                              // Count only bookings that are booked/confirmed on the selected date
+                              let bookedRooms = 0;
+                              let bookedBeds = 0;
+
+                              filteredRoomsForReport.forEach((room) => {
+                                const normalizedReportDate = new Date(reportDate);
+                                normalizedReportDate.setHours(0, 0, 0, 0);
+
+                                // Count only booked/confirmed bookings on the report date
+                                const bookedBookings = bookings.filter((b) => {
+                                  if (b.roomId !== room.id) return false;
+                                  if (b.status !== "booked" && b.status !== "confirmed") return false;
+                                  
+                                  const checkIn = new Date(b.checkInDate);
+                                  checkIn.setHours(0, 0, 0, 0);
+                                  const checkOut = new Date(b.checkOutDate);
+                                  checkOut.setHours(0, 0, 0, 0);
+
+                                  // Only count bookings active on the selected date
+                                  return (
+                                    checkIn <= normalizedReportDate &&
+                                    checkOut > normalizedReportDate
+                                  );
+                                });
+
+                                if (bookedBookings.length > 0) {
+                                  bookedRooms++;
+                                  bookedBeds += bookedBookings.length;
+                                }
+                              });
+
+                              return `${bookedRooms}/${bookedBeds}`;
+                            })()}
                           </div>
                         </div>
                         <div className="bg-orange-100/50 p-3 rounded">
