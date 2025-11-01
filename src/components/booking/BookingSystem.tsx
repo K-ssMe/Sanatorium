@@ -2469,12 +2469,79 @@ export default function BookingSystem() {
           },
           {
             Отчет: "Занято",
-            Значение: `${reportStats.occupied}/${reportStats.occupiedBeds}`,
+            Значение: `${(() => {
+              const reportDate = new Date(filters?.date || reportDateFrom);
+              reportDate.setHours(0, 0, 0, 0);
+
+              let occupiedRooms = 0;
+              let occupiedBeds = 0;
+
+              filteredRooms.forEach((room) => {
+                const normalizedReportDate = new Date(reportDate);
+                normalizedReportDate.setHours(0, 0, 0, 0);
+
+                const activeBookings = bookings.filter((b) => {
+                  if (b.roomId !== room.id) return false;
+
+                  const checkIn = new Date(b.checkInDate);
+                  checkIn.setHours(0, 0, 0, 0);
+                  const checkOut = new Date(b.checkOutDate);
+                  checkOut.setHours(0, 0, 0, 0);
+
+                  return (
+                    (b.status === "checked_in" ||
+                      b.status === "booked" ||
+                      b.status === "confirmed") &&
+                    checkIn < normalizedReportDate &&
+                    checkOut >= normalizedReportDate
+                  );
+                });
+
+                if (activeBookings.length > 0) {
+                  occupiedRooms++;
+                  occupiedBeds += activeBookings.length;
+                }
+              });
+
+              return `${occupiedRooms}/${occupiedBeds}`;
+            })()}`,
           },
           {
             Отчет: "Забронировано",
-            Значение: `${reportStats.booked}/${reportStats.bookedBeds}`,
+            Значение: `${(() => {
+              const reportDate = new Date(filters?.date || reportDateFrom);
+              reportDate.setHours(0, 0, 0, 0);
+
+              let bookedRooms = 0;
+              let bookedBeds = 0;
+
+              filteredRooms.forEach((room) => {
+                const normalizedReportDate = new Date(reportDate);
+                normalizedReportDate.setHours(0, 0, 0, 0);
+
+                const bookedBookings = bookings.filter((b) => {
+                  if (b.roomId !== room.id) return false;
+                  if (b.status !== "booked" && b.status !== "confirmed")
+                    return false;
+
+                  const checkIn = new Date(b.checkInDate);
+                  checkIn.setHours(0, 0, 0, 0);
+
+                  return (
+                    checkIn.getTime() === normalizedReportDate.getTime()
+                  );
+                });
+
+                if (bookedBookings.length > 0) {
+                  bookedRooms++;
+                  bookedBeds += bookedBookings.length;
+                }
+              });
+
+              return `${bookedRooms}/${bookedBeds}`;
+            })()}`,
           },
+
           { Отчет: "Выезжает", Значение: `-${outgoing}` },
           { Отчет: "", Значение: "" },
           { Отчет: "Состоит", Значение: totalOccupiedPlaces },
