@@ -248,7 +248,8 @@ export default function BookingSystem() {
     useState(false);
   const [isBackupDialogOpen, setIsBackupDialogOpen] = useState(false);
   const [isAuditLogDialogOpen, setIsAuditLogDialogOpen] = useState(false);
-  const [isExportImportDialogOpen, setIsExportImportDialogOpen] = useState(false);
+  const [isExportImportDialogOpen, setIsExportImportDialogOpen] =
+    useState(false);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>(() => {
     const saved = localStorage.getItem("sanatorium_auditLogs");
     if (saved) {
@@ -1435,7 +1436,7 @@ export default function BookingSystem() {
         // Confirm import
         if (
           !confirm(
-            `Вы уверены, что хотите восстановить данные из резервной копии от ${new Date(backupData.exportDate).toLocaleDateString("ru-RU")}?\n\nВсе текущие данные будут заменены!`
+            `Вы уверены, что хотите восстановить данные из резервной копии от ${new Date(backupData.exportDate).toLocaleDateString("ru-RU")}?\n\nВсе текущие данные будут заменены!`,
           )
         ) {
           return;
@@ -1447,8 +1448,12 @@ export default function BookingSystem() {
           checkInDate: new Date(b.checkInDate),
           checkOutDate: new Date(b.checkOutDate),
           createdAt: new Date(b.createdAt),
-          actualCheckInAt: b.actualCheckInAt ? new Date(b.actualCheckInAt) : undefined,
-          actualCheckOutAt: b.actualCheckOutAt ? new Date(b.actualCheckOutAt) : undefined,
+          actualCheckInAt: b.actualCheckInAt
+            ? new Date(b.actualCheckInAt)
+            : undefined,
+          actualCheckOutAt: b.actualCheckOutAt
+            ? new Date(b.actualCheckOutAt)
+            : undefined,
         }));
 
         // Parse dates in guests
@@ -1471,22 +1476,28 @@ export default function BookingSystem() {
         }));
 
         // Parse dates in audit history
-        const parsedAuditHistory = backupData.auditHistory.map((audit: any) => ({
-          ...audit,
-          date: new Date(audit.date),
-          bookings: audit.bookings.map((b: any) => ({
-            ...b,
-            checkInDate: new Date(b.checkInDate),
-            checkOutDate: new Date(b.checkOutDate),
-            createdAt: new Date(b.createdAt),
-            actualCheckInAt: b.actualCheckInAt ? new Date(b.actualCheckInAt) : undefined,
-            actualCheckOutAt: b.actualCheckOutAt ? new Date(b.actualCheckOutAt) : undefined,
-          })),
-          rooms: audit.rooms.map((r: any) => ({
-            ...r,
-            blockedAt: r.blockedAt ? new Date(r.blockedAt) : undefined,
-          })),
-        }));
+        const parsedAuditHistory = backupData.auditHistory.map(
+          (audit: any) => ({
+            ...audit,
+            date: new Date(audit.date),
+            bookings: audit.bookings.map((b: any) => ({
+              ...b,
+              checkInDate: new Date(b.checkInDate),
+              checkOutDate: new Date(b.checkOutDate),
+              createdAt: new Date(b.createdAt),
+              actualCheckInAt: b.actualCheckInAt
+                ? new Date(b.actualCheckInAt)
+                : undefined,
+              actualCheckOutAt: b.actualCheckOutAt
+                ? new Date(b.actualCheckOutAt)
+                : undefined,
+            })),
+            rooms: audit.rooms.map((r: any) => ({
+              ...r,
+              blockedAt: r.blockedAt ? new Date(r.blockedAt) : undefined,
+            })),
+          }),
+        );
 
         // Parse dates in audit logs
         const parsedAuditLogs = backupData.auditLogs.map((log: any) => ({
@@ -1512,14 +1523,29 @@ export default function BookingSystem() {
         setRoomTypes(parsedRoomTypes);
 
         // Save to localStorage
-        localStorage.setItem("sanatorium_bookings", JSON.stringify(parsedBookings));
+        localStorage.setItem(
+          "sanatorium_bookings",
+          JSON.stringify(parsedBookings),
+        );
         localStorage.setItem("sanatorium_guests", JSON.stringify(parsedGuests));
         localStorage.setItem("sanatorium_rooms", JSON.stringify(parsedRooms));
-        localStorage.setItem("sanatorium_organizations", JSON.stringify(parsedOrganizations));
+        localStorage.setItem(
+          "sanatorium_organizations",
+          JSON.stringify(parsedOrganizations),
+        );
         localStorage.setItem("sanatorium_currentDate", backupData.currentDate);
-        localStorage.setItem("sanatorium_auditHistory", JSON.stringify(parsedAuditHistory));
-        localStorage.setItem("sanatorium_auditLogs", JSON.stringify(parsedAuditLogs));
-        localStorage.setItem("sanatorium_roomTypes", JSON.stringify(parsedRoomTypes));
+        localStorage.setItem(
+          "sanatorium_auditHistory",
+          JSON.stringify(parsedAuditHistory),
+        );
+        localStorage.setItem(
+          "sanatorium_auditLogs",
+          JSON.stringify(parsedAuditLogs),
+        );
+        localStorage.setItem(
+          "sanatorium_roomTypes",
+          JSON.stringify(parsedRoomTypes),
+        );
 
         alert("Данные успешно восстановлены из резервной копии!");
         setIsExportImportDialogOpen(false);
@@ -5972,13 +5998,15 @@ export default function BookingSystem() {
                               let occupiedBeds = 0;
 
                               filteredRoomsForReport.forEach((room) => {
-                                const normalizedReportDate = new Date(reportDate);
+                                const normalizedReportDate = new Date(
+                                  reportDate,
+                                );
                                 normalizedReportDate.setHours(0, 0, 0, 0);
 
                                 // Count all bookings that are active on the report date
                                 const activeBookings = bookings.filter((b) => {
                                   if (b.roomId !== room.id) return false;
-                                  
+
                                   const checkIn = new Date(b.checkInDate);
                                   checkIn.setHours(0, 0, 0, 0);
                                   const checkOut = new Date(b.checkOutDate);
@@ -6045,14 +6073,20 @@ export default function BookingSystem() {
                               let bookedBeds = 0;
 
                               filteredRoomsForReport.forEach((room) => {
-                                const normalizedReportDate = new Date(reportDate);
+                                const normalizedReportDate = new Date(
+                                  reportDate,
+                                );
                                 normalizedReportDate.setHours(0, 0, 0, 0);
 
                                 // Count only booked/confirmed bookings on the report date
                                 const bookedBookings = bookings.filter((b) => {
                                   if (b.roomId !== room.id) return false;
-                                  if (b.status !== "booked" && b.status !== "confirmed") return false;
-                                  
+                                  if (
+                                    b.status !== "booked" &&
+                                    b.status !== "confirmed"
+                                  )
+                                    return false;
+
                                   const checkIn = new Date(b.checkInDate);
                                   checkIn.setHours(0, 0, 0, 0);
                                   const checkOut = new Date(b.checkOutDate);
@@ -6791,10 +6825,7 @@ export default function BookingSystem() {
         </Dialog>
 
         {/* Backup and Restore Dialog */}
-        <Dialog
-          open={isBackupDialogOpen}
-          onOpenChange={setIsBackupDialogOpen}
-        >
+        <Dialog open={isBackupDialogOpen} onOpenChange={setIsBackupDialogOpen}>
           <DialogContent className="max-w-md bg-white">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 text-purple-800">
@@ -6815,10 +6846,12 @@ export default function BookingSystem() {
                     • <strong>Экспорт данных</strong> - создание резервной копии
                   </li>
                   <li>
-                    • <strong>Импорт данных</strong> - восстановление из резервной копии
+                    • <strong>Импорт данных</strong> - восстановление из
+                    резервной копии
                   </li>
                   <li>
-                    • <strong>Проверка данных</strong> - автоматическая проверка целостности
+                    • <strong>Проверка данных</strong> - автоматическая проверка
+                    целостности
                   </li>
                 </ul>
               </div>
