@@ -1,304 +1,498 @@
-# 🏥 Sanatorium Management System
+# 🏥 Санаторий "Днестр" - Система управления санаторием
 
-A comprehensive full-stack application for managing sanatorium operations including room management, guest registration, booking system, and reporting.
+Полнофункциональная система управления санаторием с backend API, PostgreSQL базой данных и современным React frontend.
 
-## 🚀 Features
+## 🏗 Архитектура проекта
 
-### 🔐 Authentication & Authorization
-- JWT-based authentication
-- Role-based access control (Administrator, Manager, Reception)
-- Secure API endpoints with middleware protection
+### Backend (Node.js + TypeScript + PostgreSQL)
+- **Express.js** REST API с TypeORM
+- **PostgreSQL** база данных
+- **JWT** аутентификация
+- **Swagger** документация API
+- **Docker** контейнеризация
 
-### 🏨 Room Management
-- Room creation, editing, and deletion
-- Multiple room categories (Single, Double, Double with Balcony, Family, Luxury)
-- Building and floor organization
-- Real-time room status tracking (Available, Occupied, Booked, Reserved, Maintenance)
-- Capacity and pricing management
+### Frontend (React + TypeScript + Vite)
+- **React 18** с TypeScript
+- **TailwindCSS** + ShadCN/UI
+- **Dual Storage**: LocalStorage + PostgreSQL API
+- **React Router v6**
 
-### 👥 Guest Management
-- Guest registration with passport and contact details
-- Guest history tracking
-- Search functionality by name, phone, or passport
-- Emergency contact information
+## 🚀 Основные возможности
 
-### 📅 Booking System
-- Create, edit, extend, and cancel bookings
-- Interactive calendar view for availability
-- Grid view for room layout visualization
-- Automatic status updates
-- Special requests and notes
+### 🏨 Управление размещением
+- **Календарный и сеточный режимы** просмотра номеров
+- **Интерактивная схема номеров** с цветовой индикацией:
+  - 🟢 Свободно (available)
+  - 🔴 Занято (occupied)
+  - 🟡 Забронировано (booked)
+  - 🟣 Резерв (reserved)
+  - ⚫ Заблокировано (maintenance/out_of_order)
+- **Два корпуса** (A и B) с 5 этажами
+- **Категории номеров:**
+  - 1 Местный стд.
+  - 1 Местный ул. 1 кат. (душ)
+  - 2х Местный
+  - 2х Местный ул. 1 кат. (душ)
+  - Семейный
+  - Семейный ул. 1 кат. (душ)
+  - Люкс 2 Местный
+  - Люкс
 
-### 📊 Reporting & Analytics
-- Occupancy reports by date range
-- Revenue analytics with breakdowns
-- Guest statistics and repeat customer tracking
-- Audit logs for all system actions
-- Export functionality (CSV)
+### 📅 Система бронирования
+- **CRUD операции** через REST API
+- **Статусы бронирований:**
+  - pending - Ожидает подтверждения
+  - confirmed - Подтверждена
+  - checked_in - Заселен
+  - checked_out - Выселен
+  - cancelled - Отменена
+  - no_show - Не явился
+- **Управление бронированиями:**
+  - Создание и редактирование
+  - Подтверждение и заселение
+  - Досрочный выезд
+  - Продление срока
+  - Перевод между номерами
+  - Обмен гостями
+  - Отмена брони
+- **Работа с путевками** и организациями
+- **Финансовый учет:** totalAmount, paidAmount, remainingAmount
 
-## 🛠 Tech Stack
+### 👥 Управление гостями
+- **База данных гостей** в PostgreSQL
+- **Полная информация:**
+  - ФИО (firstName, lastName, middleName)
+  - Паспортные данные (passportNumber - unique)
+  - Контакты (phone, email)
+  - Дата рождения и возраст (автоматический расчет)
+  - Адрес
+  - Экстренные контакты (emergencyContact, emergencyPhone)
+  - Заметки
+- **История бронирований** каждого гостя
+- **Поиск** по всем полям
+- **Валидация данных** через class-validator
+
+### 🏢 Управление организациями
+- Регистрация организаций
+- Выдача путевок
+- Контрактная информация
+- Отслеживание выданных путевок
+
+### 📊 Отчетность и аналитика
+- **Отчет по занятости:**
+  - Статистика по корпусам, этажам, категориям
+  - Текущая заполненность
+  - Экспорт в PDF, DOCX
+- **Отчет по состоянию на дату:**
+  - Свободные/занятые/забронированные номера
+  - Прогноз на 7 дней
+  - Движение гостей (заезды/выезды)
+  - Свободные места по типам
+- **Отчет по гостям:**
+  - Список гостей за период
+  - История бронирований
+  - Финансовая информация
+- **Фильтры:** по корпусу, этажу, категории, периоду
+
+### 🌙 Ночной аудит
+- **Автоматическая обработка:**
+  - Автоматическое выселение (checked_out)
+  - Завершение просроченных броней
+  - Подтверждение броней к заселению
+  - Обновление статусов номеров
+- **Журнал аудита** (AuditLog entity)
+- **История аудитов** с возможностью возврата
+
+### 🔐 Система безопасности
+- **JWT аутентификация** с bcrypt хешированием
+- **Роли пользователей:**
+  - Administrator - полный доступ
+  - Manager - управление бронированиями и отчеты
+  - Reception - заселение/выселение, базовые операции
+- **Audit Log** - полное логирование всех операций:
+  - CREATE, UPDATE, DELETE
+  - LOGIN, LOGOUT
+  - CHECK_IN, CHECK_OUT
+  - CANCEL_BOOKING, EXTEND_BOOKING
+- **Rate limiting** - защита от DDoS
+- **Helmet.js** - безопасность HTTP заголовков
+- **CORS** настройка
+
+### ⚙️ Настройки системы
+- **Управление номерами** через API
+- **Управление пользователями** и ролями
+- **Резервное копирование:**
+  - Экспорт данных в JSON
+  - Импорт из резервной копии
+  - PostgreSQL бэкапы
+- **Журнал аудита** всех операций
+
+## 🛠 Технологический стек
 
 ### Backend
 - **Node.js** + **TypeScript**
-- **Express.js** - Web framework
-- **PostgreSQL** - Database
-- **TypeORM** - ORM with migrations
-- **JWT** - Authentication
-- **Swagger** - API documentation
-- **bcryptjs** - Password hashing
-- **Helmet** - Security middleware
+- **Express.js** 5.1.0 - веб-фреймворк
+- **TypeORM** 0.3.25 - ORM для PostgreSQL
+- **PostgreSQL** 15 - основная база данных
+- **JWT** (jsonwebtoken) - аутентификация
+- **bcryptjs** - хеширование паролей
+- **class-validator** + **class-transformer** - валидация
+- **Swagger** (swagger-jsdoc, swagger-ui-express) - API документация
+- **Helmet** - безопасность
+- **express-rate-limit** - защита от DDoS
+- **CORS** - кросс-доменные запросы
 
 ### Frontend
-- **React** + **TypeScript**
-- **Vite** - Build tool
-- **TailwindCSS** - Styling
-- **React Router** - Navigation
-- **Lucide React** - Icons
-- **ShadCN/UI** - UI components
+- **React 18** + **TypeScript**
+- **Vite** - быстрая сборка
+- **TailwindCSS** - стилизация
+- **ShadCN/UI** - компоненты
+- **React Router v6** - маршрутизация
+- **Lucide React** - иконки
+- **date-fns** - работа с датами
+- **React Hook Form** + **Zod** - формы и валидация
 
 ### DevOps
 - **Docker** + **Docker Compose**
-- **Nginx** - Reverse proxy
-- **PostgreSQL** - Containerized database
+- **PostgreSQL** контейнер
+- **Nginx** (production)
+- **Health checks** и автоматический перезапуск
 
-## 📋 Prerequisites
+## 📋 Требования
 
-- Node.js 18+
-- Docker & Docker Compose
-- PostgreSQL (if running locally)
+- **Node.js** 18+
+- **PostgreSQL** 15+
+- **Docker** и **Docker Compose** (опционально)
+- **npm** или **yarn**
 
-## 🚀 Quick Start
+## 🚀 Быстрый старт
 
-### Using Docker (Recommended)
+### Вариант 1: Docker Compose (Рекомендуется)
 
-1. **Clone the repository**
+1. **Клонируйте репозиторий**
    ```bash
    git clone <repository-url>
    cd sanatorium-management
    ```
 
-2. **Start with Docker Compose**
+2. **Настройте переменные окружения**
+   ```bash
+   cp backend/.env.example backend/.env
+   # Отредактируйте backend/.env при необходимости
+   ```
+
+3. **Запустите все сервисы**
    ```bash
    docker-compose up -d
    ```
 
-3. **Access the application**
+4. **Доступ к приложению:**
    - Frontend: http://localhost:3000
    - Backend API: http://localhost:3001
    - API Documentation: http://localhost:3001/api-docs
+   - PostgreSQL: localhost:5432
 
-### Manual Setup
+### Вариант 2: Локальная разработка
 
-#### Backend Setup
+#### Backend
 
-1. **Navigate to backend directory**
+1. **Установите PostgreSQL** и создайте базу данных:
+   ```sql
+   CREATE DATABASE sanatorium_db;
+   CREATE USER sanatorium WITH PASSWORD 'password';
+   GRANT ALL PRIVILEGES ON DATABASE sanatorium_db TO sanatorium;
+   ```
+
+2. **Настройте backend**
    ```bash
    cd backend
-   ```
-
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
-
-3. **Setup environment variables**
-   ```bash
    cp .env.example .env
-   # Edit .env with your database credentials
-   ```
-
-4. **Start PostgreSQL** (if not using Docker)
-   ```bash
-   # Using Docker for just the database
-   docker run --name postgres -e POSTGRES_DB=sanatorium_db -e POSTGRES_USER=sanatorium -e POSTGRES_PASSWORD=password -p 5432:5432 -d postgres:15-alpine
-   ```
-
-5. **Run migrations and seed data**
-   ```bash
-   npm run migration:run
-   npm run seed
-   ```
-
-6. **Start the backend server**
-   ```bash
+   # Отредактируйте .env с вашими настройками БД
+   npm install
    npm run dev
    ```
 
-#### Frontend Setup
+3. **Backend запустится на** http://localhost:3001
+   - API Docs: http://localhost:3001/api-docs
+   - Health check: http://localhost:3001/health
 
-1. **Navigate to project root**
-   ```bash
-   cd ..
-   ```
+#### Frontend
 
-2. **Install dependencies**
+1. **Установите зависимости**
    ```bash
    npm install
    ```
 
-3. **Start the development server**
+2. **Запустите dev-сервер**
    ```bash
    npm run dev
    ```
 
-## 🔑 Default Login Credentials
+3. **Откройте приложение** http://localhost:5173
 
-After seeding the database, you can use these credentials:
+### Сборка для продакшена
 
-- **Administrator**: `admin@sanatorium.com` / `password123`
-- **Manager**: `manager@sanatorium.com` / `password123`
-- **Reception**: `reception1@sanatorium.com` / `password123`
-- **Reception**: `reception2@sanatorium.com` / `password123`
+```bash
+# Frontend
+npm run build
 
-## 📚 API Documentation
+# Backend
+cd backend
+npm run build
 
-Once the backend is running, visit http://localhost:3001/api-docs for interactive Swagger documentation.
+# Docker (все сервисы)
+docker-compose -f docker-compose.yml --profile production up -d
+```
 
-### Key API Endpoints
-
-#### Authentication
-- `POST /api/auth/login` - User login
-- `POST /api/auth/logout` - User logout
-- `GET /api/auth/me` - Get current user
-
-#### Rooms
-- `GET /api/rooms` - List all rooms
-- `POST /api/rooms` - Create new room
-- `GET /api/rooms/:id` - Get room details
-- `PUT /api/rooms/:id` - Update room
-- `DELETE /api/rooms/:id` - Delete room
-- `GET /api/rooms/availability` - Check availability
-
-#### Guests
-- `GET /api/guests` - List all guests
-- `POST /api/guests` - Create new guest
-- `GET /api/guests/:id` - Get guest details
-- `PUT /api/guests/:id` - Update guest
-- `DELETE /api/guests/:id` - Delete guest
-
-#### Bookings
-- `GET /api/bookings` - List all bookings
-- `POST /api/bookings` - Create new booking
-- `GET /api/bookings/:id` - Get booking details
-- `PUT /api/bookings/:id` - Update booking
-- `DELETE /api/bookings/:id` - Delete booking
-
-## 🏗 Project Structure
+## 📁 Структура проекта
 
 ```
 sanatorium-management/
-├── backend/                 # Backend API
+├── backend/                    # Backend API
 │   ├── src/
-│   │   ├── config/         # Database configuration
-│   │   ├── entities/       # TypeORM entities
-│   │   ├── middleware/     # Express middleware
-│   │   ├── routes/         # API routes
-│   │   ├── seeds/          # Database seeding
-│   │   └── server.ts       # Main server file
-│   ├── Dockerfile
-│   └── package.json
-├── src/                    # Frontend React app
-│   ├── components/         # React components
-│   ├── data/              # Static data
-│   ├── lib/               # Utilities
-│   └── types/             # TypeScript types
-├── docker-compose.yml      # Docker services
-├── nginx.conf             # Nginx configuration
-└── README.md
+│   │   ├── config/            # Конфигурация (database.ts)
+│   │   ├── entities/          # TypeORM сущности
+│   │   │   ├── User.ts        # Пользователи
+│   │   │   ├── Room.ts        # Номера
+│   │   │   ├── Guest.ts       # Гости
+│   │   │   ├── Booking.ts     # Бронирования
+│   │   │   └── AuditLog.ts    # Журнал аудита
+│   │   ├── middleware/        # Express middleware
+│   │   │   ├── auth.ts        # JWT аутентификация
+│   │   │   ├── audit.ts       # Логирование операций
+│   │   │   ├── errorHandler.ts
+│   │   │   └── logger.ts
+│   │   ├── routes/            # API маршруты
+│   │   ├── seeds/             # Начальные данные
+│   │   └── server.ts          # Точка входа
+│   ├── init.sql               # SQL инициализация
+│   ├── package.json
+│   ├── tsconfig.json
+│   └── .env.example
+├── src/                       # Frontend
+│   ├── components/
+│   │   ├── auth/             # Авторизация
+│   │   ├── booking/          # Бронирование
+│   │   ├── guest/            # Гости
+│   │   ├── organization/     # Организации
+│   │   ├── room/             # Номера
+│   │   └── ui/               # ShadCN компоненты
+│   ├── contexts/
+│   │   └── AuthContext.tsx   # Контекст авторизации
+│   ├── types/
+│   │   ├── booking.ts        # TypeScript типы
+│   │   └── supabase.ts
+│   ├── App.tsx
+│   └── main.tsx
+├── docker-compose.yml         # Docker конфигурация
+├── Dockerfile.frontend        # Frontend Dockerfile
+├── nginx.conf                 # Nginx конфигурация
+├── package.json
+├── tsconfig.json
+└── vite.config.ts
 ```
 
-## 🔧 Development
+## 🔌 API Endpoints
 
-### Database Migrations
+### Authentication
+- `POST /api/auth/login` - Вход в систему
+- `POST /api/auth/register` - Регистрация
+- `POST /api/auth/logout` - Выход
+- `GET /api/auth/me` - Текущий пользователь
 
+### Users
+- `GET /api/users` - Список пользователей
+- `POST /api/users` - Создать пользователя
+- `PUT /api/users/:id` - Обновить пользователя
+- `DELETE /api/users/:id` - Удалить пользователя
+
+### Rooms
+- `GET /api/rooms` - Список номеров
+- `GET /api/rooms/:id` - Детали номера
+- `POST /api/rooms` - Создать номер
+- `PUT /api/rooms/:id` - Обновить номер
+- `DELETE /api/rooms/:id` - Удалить номер
+
+### Guests
+- `GET /api/guests` - Список гостей
+- `GET /api/guests/:id` - Детали гостя
+- `POST /api/guests` - Создать гостя
+- `PUT /api/guests/:id` - Обновить гостя
+- `DELETE /api/guests/:id` - Удалить гостя
+
+### Bookings
+- `GET /api/bookings` - Список бронир��ваний
+- `GET /api/bookings/:id` - Детали бронирования
+- `POST /api/bookings` - Создать бронирование
+- `PUT /api/bookings/:id` - Обновить бронирование
+- `DELETE /api/bookings/:id` - Удалить бронирование
+- `POST /api/bookings/:id/check-in` - Заселить
+- `POST /api/bookings/:id/check-out` - Выселить
+- `POST /api/bookings/:id/cancel` - Отменить
+
+### Reports
+- `GET /api/reports/occupancy` - Отчет по занятости
+- `GET /api/reports/status` - Отчет по состоянию
+- `GET /api/reports/guests` - Отчет по гостям
+
+### Audit
+- `GET /api/audit` - Журнал аудита
+- `GET /api/audit/:id` - Детали записи
+
+**Полная документация:** http://localhost:3001/api-docs
+
+## 💾 База данных
+
+### PostgreSQL Schema
+
+**Tables:**
+- `users` - Пользователи системы
+- `rooms` - Номера санатория
+- `guests` - Гости
+- `bookings` - Бронирования
+- `audit_logs` - Журнал аудита
+
+**Extensions:**
+- `uuid-ossp` - UUID генерация
+- `pg_trgm` - Полнотекстовый поиск
+
+### Dual Storage Strategy
+
+Приложение поддерживает два режима хранения:
+
+1. **LocalStorage** (offline-first):
+   - `sanatorium_bookings`
+   - `sanatorium_guests`
+   - `sanatorium_rooms`
+   - `sanatorium_organizations`
+   - `sanatorium_currentDate`
+   - `sanatorium_auditHistory`
+
+2. **PostgreSQL** (через API):
+   - Полная синхронизация с backend
+   - Реляционные связи
+   - Транзакции и целостность данных
+
+## 🔒 Безопасность
+
+- **JWT токены** с истечением через 7 дней
+- **bcrypt** хеширование паролей (10 раундов)
+- **Rate limiting** - 100 запросов за 15 минут
+- **Helmet.js** - защита HTTP заголовков
+- **CORS** - настроенные домены
+- **Валидация** всех входных данных
+- **Audit logging** всех операций
+- **SQL injection** защита через TypeORM
+- **XSS** защита
+
+## 📈 Мониторинг
+
+- **Health check endpoint:** `/health`
+- **API Documentation:** `/api-docs`
+- **Database logging** в development режиме
+- **Audit logs** для всех операций
+- **Docker health checks** для всех сервисов
+
+## 🎨 Дизайн
+
+- Адаптивный дизайн для всех устройств
+- Цветовая индикация статусов
+- Градиентные фоны для разных разделов
+- Современный UI с ShadCN компонентами
+- Интуитивно понятный интерфейс
+
+## 🔧 Разработка
+
+### Доступные скрипты
+
+**Frontend:**
 ```bash
-# Generate new migration
-npm run migration:generate -- -n MigrationName
-
-# Run migrations
-npm run migration:run
-
-# Revert last migration
-npm run migration:revert
+npm run dev          # Dev-сервер
+npm run build        # Сборка
+npm run preview      # Предпросмотр сборки
+npm run lint         # Линтинг
 ```
 
-### Seeding Data
+**Backend:**
+```bash
+npm run dev          # Dev-сервер с nodemon
+npm run build        # Сборка TypeScript
+npm start            # Запуск production
+```
+
+**Docker:**
+```bash
+docker-compose up -d              # Запустить все сервисы
+docker-compose down               # Остановить все сервисы
+docker-compose logs -f backend    # Логи backend
+docker-compose logs -f postgres   # Логи БД
+```
+
+## 🧪 Тестирование
 
 ```bash
-# Seed the database with test data
+# Frontend
+npm test
+
+# Backend
 cd backend
-npm run seed
+npm test
 ```
 
-### Building for Production
+## 📝 Переменные окружения
+
+### Backend (.env)
+```env
+DB_HOST=localhost
+DB_PORT=5432
+DB_USERNAME=sanatorium
+DB_PASSWORD=password
+DB_NAME=sanatorium_db
+
+JWT_SECRET=your-super-secret-jwt-key
+JWT_EXPIRES_IN=7d
+
+PORT=3001
+NODE_ENV=development
+CORS_ORIGIN=http://localhost:5173
+```
+
+### Frontend
+```env
+VITE_API_URL=http://localhost:3001/api
+```
+
+## 🚢 Деплой
+
+### Production с Docker
 
 ```bash
-# Build backend
-cd backend
-npm run build
+# Сборка и запуск с Nginx
+docker-compose --profile production up -d
 
-# Build frontend
-cd ..
-npm run build
+# Доступ:
+# - Frontend: http://localhost:80
+# - Backend: http://localhost:3001
+# - Nginx: http://localhost:80
 ```
 
-## 🐳 Docker Commands
+### Manual Deploy
 
-```bash
-# Start all services
-docker-compose up -d
+1. Настройте PostgreSQL на production сервере
+2. Соберите backend: `cd backend && npm run build`
+3. Соберите frontend: `npm run build`
+4. Настройте Nginx для проксирования запросов
+5. Запустите backend: `cd backend && npm start`
+6. Разверните frontend build в Nginx
 
-# View logs
-docker-compose logs -f
+## 📄 Лицензия
 
-# Stop all services
-docker-compose down
+Этот проект создан для санатория "Днестр".
 
-# Rebuild and start
-docker-compose up --build -d
+## 🆘 Поддержка
 
-# Run database migrations in container
-docker-compose exec backend npm run migration:run
-
-# Seed database in container
-docker-compose exec backend npm run seed
-```
-
-## 🔒 Security Features
-
-- JWT token-based authentication
-- Password hashing with bcrypt
-- Rate limiting on API endpoints
-- CORS protection
-- Helmet security headers
-- Input validation and sanitization
-- SQL injection prevention with TypeORM
-- Audit logging for all actions
-
-## 📈 Monitoring & Logging
-
-- Request logging middleware
-- Error handling with stack traces in development
-- Audit logs for user actions
-- Health check endpoints
-- Database connection monitoring
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
-
-## 📄 License
-
-This project is licensed under the MIT License.
-
-## 🆘 Support
-
-For support and questions, please open an issue in the repository.
+Для вопросов и поддержки обращайтесь к разработчикам проекта.
 
 ---
 
-**Built with ❤️ for efficient sanatorium management**
+**Создано с ❤️ для эффективного управления санаторием "Днестр"**
