@@ -6213,7 +6213,8 @@ export default function BookingSystem() {
                                   );
                               }
 
-                              // Calculate outgoing guests
+                              // Calculate outgoing guests - include ALL bookings with checkout on this date
+                              // regardless of their current status (including completed)
                               const outgoingBookings = bookings.filter((b) => {
                                 if (
                                   !filteredRoomsForReport.some(
@@ -6222,13 +6223,8 @@ export default function BookingSystem() {
                                 ) {
                                   return false;
                                 }
-                                if (
-                                  b.status !== "checked_in" &&
-                                  b.status !== "booked" &&
-                                  b.status !== "confirmed"
-                                ) {
-                                  return false;
-                                }
+                                
+                                // Include ALL statuses - we want to count everyone who checked out on this date
                                 const checkOut = new Date(b.checkOutDate);
                                 checkOut.setHours(0, 0, 0, 0);
                                 return (
