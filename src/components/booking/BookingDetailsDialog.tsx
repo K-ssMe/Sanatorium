@@ -625,18 +625,18 @@ export default function BookingDetailsDialog({
                           : "Женский"}
                       </div>
                     </div>
-                    {roomBooking.status === "booked" && (
+                    {(roomBooking.status === "booked" || roomBooking.status === "confirmed") && (
                       <div>
                         <span className="font-medium text-gray-600">
                           Статус:
                         </span>
                         <div className="flex items-center gap-1">
                           <span className="font-semibold">
-                            {roomBooking.isConfirmed
+                            {roomBooking.status === "confirmed"
                               ? "Подтверждено"
                               : "Не подтверждено"}
                           </span>
-                          {roomBooking.isConfirmed && (
+                          {roomBooking.status === "confirmed" && (
                             <span className="text-green-600 text-lg">✓</span>
                           )}
                         </div>
@@ -656,7 +656,7 @@ export default function BookingDetailsDialog({
                     </div>
                   )}
 
-                  {roomBooking.status === "booked" && (
+                  {(roomBooking.status === "booked" || roomBooking.status === "confirmed") && (
                     <div className="flex items-center gap-2">
                       <Button
                         variant="outline"
@@ -664,12 +664,12 @@ export default function BookingDetailsDialog({
                         onClick={() => onToggleConfirmation(roomBooking.id)}
                         className={cn(
                           "flex items-center gap-1 h-7 px-2 text-xs",
-                          roomBooking.isConfirmed
+                          roomBooking.status === "confirmed"
                             ? "bg-green-100 border-green-500 text-green-700"
                             : "border-gray-300",
                         )}
                       >
-                        {roomBooking.isConfirmed ? (
+                        {roomBooking.status === "confirmed" ? (
                           <>
                             <span className="text-green-600">✓</span>
                             <span>Подтверждено</span>
