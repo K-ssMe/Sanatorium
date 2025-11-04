@@ -1066,11 +1066,14 @@ export default function BookingSystem() {
 
   const handleToggleConfirmation = (bookingId: string) => {
     setBookings((prevBookings) => {
-      const updated = prevBookings.map((booking) =>
-        booking.id === bookingId
-          ? { ...booking, isConfirmed: !booking.isConfirmed }
-          : booking,
-      );
+      const updated = prevBookings.map((booking) => {
+        if (booking.id === bookingId) {
+          // Toggle between "booked" and "confirmed"
+          const newStatus = booking.status === "confirmed" ? "booked" : "confirmed";
+          return { ...booking, status: newStatus };
+        }
+        return booking;
+      });
       localStorage.setItem("sanatorium_bookings", JSON.stringify(updated));
       return updated;
     });
