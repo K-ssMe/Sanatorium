@@ -1963,14 +1963,19 @@ export default function BookingSystem() {
     });
 
     // Add checking out guests to occupied count AFTER the loop
-    const normalizedDate = new Date(date);
-    normalizedDate.setHours(0, 0, 0, 0);
-    
     bookings.forEach((b) => {
       const checkOut = new Date(b.checkOutDate);
       checkOut.setHours(0, 0, 0, 0);
+      const normalizedDate = new Date(date);
+      normalizedDate.setHours(0, 0, 0, 0);
       if (checkOut.getTime() === normalizedDate.getTime()) {
-        occupiedBeds++;
+        // Only count if this guest is not already counted in occupiedBeds
+        const checkIn = new Date(b.checkInDate);
+        checkIn.setHours(0, 0, 0, 0);
+        // If checkout date equals current date, guest is still present
+        if (checkIn < normalizedDate) {
+          occupiedBeds++;
+        }
       }
     });
 
@@ -6084,7 +6089,7 @@ export default function BookingSystem() {
                                   );
                               }
 
-                              // Count all occupied rooms and beds (all active bookings before selected date)
+                              // Count occupied rooms and beds
                               let occupiedRooms = 0;
                               let occupiedBeds = 0;
 
@@ -6094,30 +6099,34 @@ export default function BookingSystem() {
                                 );
                                 normalizedReportDate.setHours(0, 0, 0, 0);
 
-                                // Count all bookings that are active before the report date
-                                const activeBookings = bookings.filter((b) => {
-                                  if (b.roomId !== room.id) return false;
+                                // Count occupied bookings (checked_in)
+                                const occupiedBookings = bookings.filter((b) => {
+                                  if (b.roomId !== room.id || b.status !== "checked_in") return false;
 
                                   const checkIn = new Date(b.checkInDate);
                                   checkIn.setHours(0, 0, 0, 0);
                                   const checkOut = new Date(b.checkOutDate);
                                   checkOut.setHours(0, 0, 0, 0);
 
-                                  // Include all bookings (checked_in, booked, confirmed) that:
-                                  // - Started before the report date
-                                  // - Haven't checked out before the report date
-                                  return (
-                                    (b.status === "checked_in" ||
-                                      b.status === "booked" ||
-                                      b.status === "confirmed") &&
-                                    checkIn < normalizedReportDate &&
-                                    checkOut >= normalizedReportDate
-                                  );
+                                  return checkIn <= normalizedReportDate && checkOut > normalizedReportDate;
                                 });
 
-                                if (activeBookings.length > 0) {
+                                if (occupiedBookings.length > 0) {
                                   occupiedRooms++;
-                                  occupiedBeds += activeBookings.length;
+                                  occupiedBeds += occupiedBookings.length;
+                                }
+                              });
+
+                              // Add checking out guests to occupied count
+                              bookings.forEach((b) => {
+                                const checkOut = new Date(b.checkOutDate);
+                                checkOut.setHours(0, 0, 0, 0);
+                                if (checkOut.getTime() === reportDate.getTime()) {
+                                  const checkIn = new Date(b.checkInDate);
+                                  checkIn.setHours(0, 0, 0, 0);
+                                  if (checkIn < reportDate) {
+                                    occupiedBeds++;
+                                  }
                                 }
                               });
 
