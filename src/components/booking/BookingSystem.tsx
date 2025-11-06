@@ -1946,8 +1946,6 @@ export default function BookingSystem() {
           occupied++;
           // Count actual occupied places (each booking = 1 person)
           occupiedBeds += occupiedBookings.length;
-          // Add checking out guests to occupied count
-          occupiedBeds += checkingOutBookings.length;
           // Free beds = total capacity minus all guests (occupied + booked)
           freeBeds += Math.max(0, room.capacity - totalGuestsInRoom);
           break;
@@ -1961,6 +1959,15 @@ export default function BookingSystem() {
         case "blocked":
           blocked++;
           break;
+      }
+    });
+
+    // Add checking out guests to occupied count AFTER the loop
+    bookings.forEach((b) => {
+      const checkOut = new Date(b.checkOutDate);
+      checkOut.setHours(0, 0, 0, 0);
+      if (checkOut.getTime() === normalizedDate.getTime()) {
+        occupiedBeds++;
       }
     });
 
