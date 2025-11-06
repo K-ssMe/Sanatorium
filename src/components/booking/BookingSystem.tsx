@@ -1966,6 +1966,8 @@ export default function BookingSystem() {
     bookings.forEach((b) => {
       const checkOut = new Date(b.checkOutDate);
       checkOut.setHours(0, 0, 0, 0);
+      const normalizedDate = new Date(date);
+      normalizedDate.setHours(0, 0, 0, 0);
       if (checkOut.getTime() === normalizedDate.getTime()) {
         occupiedBeds++;
       }
