@@ -1904,7 +1904,8 @@ export default function BookingSystem() {
         const checkOut = new Date(b.checkOutDate);
         checkOut.setHours(0, 0, 0, 0);
         // Guest is present from check-in date until (but not including) check-out date
-        return checkIn <= normalizedDate && checkOut > normalizedDate;
+        // IMPORTANT: Include guests checking out TODAY - they are still occupying the room
+        return checkIn <= normalizedDate && checkOut >= normalizedDate;
       });
 
       // For booked rooms, count booked/confirmed bookings
@@ -1920,7 +1921,8 @@ export default function BookingSystem() {
         const checkOut = new Date(b.checkOutDate);
         checkOut.setHours(0, 0, 0, 0);
         // Booking is active from check-in date until (but not including) check-out date
-        return checkIn <= normalizedDate && checkOut > normalizedDate;
+        // IMPORTANT: Include bookings checking out TODAY - they are still occupying the room
+        return checkIn <= normalizedDate && checkOut >= normalizedDate;
       });
 
       // Count total guests in this room (each booking = 1 guest)
