@@ -330,6 +330,26 @@ export default function BookingDialog({
                       onChange={(e) => setCheckOutDate(e.target.value)}
                     />
                   </div>
+                  <div>
+                    <Label htmlFor="duration-days">Количество дней</Label>
+                    <Input
+                      id="duration-days"
+                      type="number"
+                      min="1"
+                      value={(() => {
+                        const checkIn = new Date(checkInDate);
+                        const checkOut = new Date(checkOutDate);
+                        return Math.ceil((checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60 * 24));
+                      })()}
+                      onChange={(e) => {
+                        const days = parseInt(e.target.value) || 1;
+                        const checkIn = new Date(checkInDate);
+                        const newCheckOut = new Date(checkIn);
+                        newCheckOut.setDate(checkIn.getDate() + days);
+                        setCheckOutDate(newCheckOut.toISOString().split("T")[0]);
+                      }}
+                    />
+                  </div>
                 </div>
 
                 <div className="space-y-4">
