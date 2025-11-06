@@ -306,7 +306,7 @@ export default function BookingSystem() {
       {
         id: "double_improved",
         name: "double_improved",
-        displayName: "2х Местный ул. 1 кат. (душ)",
+        displayName: "2х ��естный ул. 1 кат. (душ)",
         capacity: 2,
         createdAt: new Date(),
       },
@@ -1904,8 +1904,7 @@ export default function BookingSystem() {
         const checkOut = new Date(b.checkOutDate);
         checkOut.setHours(0, 0, 0, 0);
         // Guest is present from check-in date until (but not including) check-out date
-        // IMPORTANT: Include guests checking out TODAY - they are still occupying the room
-        return checkIn <= normalizedDate && checkOut >= normalizedDate;
+        return checkIn <= normalizedDate && checkOut > normalizedDate;
       });
 
       // For booked rooms, count booked/confirmed bookings
@@ -1921,8 +1920,17 @@ export default function BookingSystem() {
         const checkOut = new Date(b.checkOutDate);
         checkOut.setHours(0, 0, 0, 0);
         // Booking is active from check-in date until (but not including) check-out date
-        // IMPORTANT: Include bookings checking out TODAY - they are still occupying the room
-        return checkIn <= normalizedDate && checkOut >= normalizedDate;
+        return checkIn <= normalizedDate && checkOut > normalizedDate;
+      });
+
+      // Count guests checking out on this date
+      const checkingOutBookings = bookings.filter((b) => {
+        if (b.roomId !== room.id || b.status !== "checked_in") {
+          return false;
+        }
+        const checkOut = new Date(b.checkOutDate);
+        checkOut.setHours(0, 0, 0, 0);
+        return checkOut.getTime() === normalizedDate.getTime();
       });
 
       // Count total guests in this room (each booking = 1 guest)
@@ -1937,6 +1945,8 @@ export default function BookingSystem() {
           occupied++;
           // Count actual occupied places (each booking = 1 person)
           occupiedBeds += occupiedBookings.length;
+          // Add checking out guests to occupied count
+          occupiedBeds += checkingOutBookings.length;
           // Free beds = total capacity minus all guests (occupied + booked)
           freeBeds += Math.max(0, room.capacity - totalGuestsInRoom);
           break;
@@ -2068,6 +2078,16 @@ export default function BookingSystem() {
         );
       });
 
+      // Count guests checking out on report date
+      const checkingOutBookings = bookings.filter((b) => {
+        if (b.roomId !== room.id || b.status !== "checked_in") {
+          return false;
+        }
+        const checkOut = new Date(b.checkOutDate);
+        checkOut.setHours(0, 0, 0, 0);
+        return checkOut.getTime() === normalizedReportDate.getTime();
+      });
+
       const totalGuestsInRoom = occupiedBookings.length + bookedBookings.length;
 
       switch (status) {
@@ -2079,6 +2099,8 @@ export default function BookingSystem() {
           occupied++;
           // Count actual occupied places (each booking = 1 person)
           occupiedBeds += occupiedBookings.length;
+          // Add checking out guests to occupied count
+          occupiedBeds += checkingOutBookings.length;
           // Free beds = total capacity minus all guests (occupied + booked)
           freeBeds += Math.max(0, room.capacity - totalGuestsInRoom);
           break;
