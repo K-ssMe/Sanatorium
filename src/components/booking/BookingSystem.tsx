@@ -1924,16 +1924,6 @@ export default function BookingSystem() {
         return checkIn <= normalizedDate && checkOut > normalizedDate;
       });
 
-      // Count guests checking out TODAY (including completed status)
-      const checkingOutBookings = bookings.filter((b) => {
-        if (b.roomId !== room.id) {
-          return false;
-        }
-        const checkOut = new Date(b.checkOutDate);
-        checkOut.setHours(0, 0, 0, 0);
-        return checkOut.getTime() === normalizedDate.getTime();
-      });
-
       // Count total guests in this room (each booking = 1 guest)
       const totalGuestsInRoom = occupiedBookings.length + bookedBookings.length;
 
@@ -1959,23 +1949,6 @@ export default function BookingSystem() {
         case "blocked":
           blocked++;
           break;
-      }
-    });
-
-    // Add checking out guests to occupied count AFTER the loop
-    bookings.forEach((b) => {
-      const checkOut = new Date(b.checkOutDate);
-      checkOut.setHours(0, 0, 0, 0);
-      const normalizedDate = new Date(date);
-      normalizedDate.setHours(0, 0, 0, 0);
-      if (checkOut.getTime() === normalizedDate.getTime()) {
-        // Only count if this guest is not already counted in occupiedBeds
-        const checkIn = new Date(b.checkInDate);
-        checkIn.setHours(0, 0, 0, 0);
-        // If checkout date equals current date, guest is still present
-        if (checkIn < normalizedDate) {
-          occupiedBeds++;
-        }
       }
     });
 
@@ -6089,7 +6062,7 @@ export default function BookingSystem() {
                                   );
                               }
 
-                              // Count occupied rooms and beds
+                              // Count all occupied rooms and beds (all active bookings before selected date)
                               let occupiedRooms = 0;
                               let occupiedBeds = 0;
 
@@ -6099,34 +6072,30 @@ export default function BookingSystem() {
                                 );
                                 normalizedReportDate.setHours(0, 0, 0, 0);
 
-                                // Count occupied bookings (checked_in)
-                                const occupiedBookings = bookings.filter((b) => {
-                                  if (b.roomId !== room.id || b.status !== "checked_in") return false;
+                                // Count all bookings that are active before the report date
+                                const activeBookings = bookings.filter((b) => {
+                                  if (b.roomId !== room.id) return false;
 
                                   const checkIn = new Date(b.checkInDate);
                                   checkIn.setHours(0, 0, 0, 0);
                                   const checkOut = new Date(b.checkOutDate);
                                   checkOut.setHours(0, 0, 0, 0);
 
-                                  return checkIn <= normalizedReportDate && checkOut > normalizedReportDate;
+                                  // Include all bookings (checked_in, booked, confirmed) that:
+                                  // - Started before the report date
+                                  // - Haven't checked out before the report date
+                                  return (
+                                    (b.status === "checked_in" ||
+                                      b.status === "booked" ||
+                                      b.status === "confirmed") &&
+                                    checkIn < normalizedReportDate &&
+                                    checkOut >= normalizedReportDate
+                                  );
                                 });
 
-                                if (occupiedBookings.length > 0) {
+                                if (activeBookings.length > 0) {
                                   occupiedRooms++;
-                                  occupiedBeds += occupiedBookings.length;
-                                }
-                              });
-
-                              // Add checking out guests to occupied count
-                              bookings.forEach((b) => {
-                                const checkOut = new Date(b.checkOutDate);
-                                checkOut.setHours(0, 0, 0, 0);
-                                if (checkOut.getTime() === reportDate.getTime()) {
-                                  const checkIn = new Date(b.checkInDate);
-                                  checkIn.setHours(0, 0, 0, 0);
-                                  if (checkIn < reportDate) {
-                                    occupiedBeds++;
-                                  }
+                                  occupiedBeds += activeBookings.length;
                                 }
                               });
 
@@ -6270,6 +6239,103 @@ export default function BookingSystem() {
                               const outgoingGuests = outgoingBookings.length;
 
                               return `${outgoingRooms}/${outgoingGuests}`;
+                            })()}
+                          </div>
+                        </div>
+                        <div className="bg-indigo-100/50 p-3 rounded">
+                          <div className="font-semibold text-indigo-900">
+                            На утро
+                          </div>
+                          <div className="text-2xl font-bold text-indigo-700">
+                            {(() => {
+                              const reportDate = new Date(reportDateFrom);
+                              reportDate.setHours(0, 0, 0, 0);
+
+                              // Apply filters to rooms
+                              let filteredRoomsForReport = roomsData;
+                              if (reportBuilding !== "all") {
+                                filteredRoomsForReport =
+                                  filteredRoomsForReport.filter(
+                                    (r) =>
+                                      r.building === reportBuilding ||
+                                      (reportBuilding === "1" &&
+                                        r.building === "A") ||
+                                      (reportBuilding === "2" &&
+                                        r.building === "B"),
+                                  );
+                              }
+                              if (reportFloor !== "all") {
+                                filteredRoomsForReport =
+                                  filteredRoomsForReport.filter(
+                                    (r) => r.floor.toString() === reportFloor,
+                                  );
+                              }
+                              if (reportRoomType !== "all") {
+                                filteredRoomsForReport =
+                                  filteredRoomsForReport.filter(
+                                    (r) => r.type === reportRoomType,
+                                  );
+                              }
+
+                              // Count occupied rooms and beds
+                              let occupiedRooms = 0;
+                              let occupiedBeds = 0;
+
+                              filteredRoomsForReport.forEach((room) => {
+                                const normalizedReportDate = new Date(reportDate);
+                                normalizedReportDate.setHours(0, 0, 0, 0);
+
+                                const activeBookings = bookings.filter((b) => {
+                                  if (b.roomId !== room.id) return false;
+
+                                  const checkIn = new Date(b.checkInDate);
+                                  checkIn.setHours(0, 0, 0, 0);
+                                  const checkOut = new Date(b.checkOutDate);
+                                  checkOut.setHours(0, 0, 0, 0);
+
+                                  return (
+                                    (b.status === "checked_in" ||
+                                      b.status === "booked" ||
+                                      b.status === "confirmed") &&
+                                    checkIn < normalizedReportDate &&
+                                    checkOut >= normalizedReportDate
+                                  );
+                                });
+
+                                if (activeBookings.length > 0) {
+                                  occupiedRooms++;
+                                  occupiedBeds += activeBookings.length;
+                                }
+                              });
+
+                              // Calculate outgoing guests
+                              const outgoingBookings = bookings.filter((b) => {
+                                if (
+                                  !filteredRoomsForReport.some(
+                                    (r) => r.id === b.roomId,
+                                  )
+                                ) {
+                                  return false;
+                                }
+
+                                const checkOut = new Date(b.checkOutDate);
+                                checkOut.setHours(0, 0, 0, 0);
+                                return (
+                                  checkOut.getTime() === reportDate.getTime()
+                                );
+                              });
+
+                              const uniqueOutgoingRooms = new Set(
+                                outgoingBookings.map((b) => b.roomId),
+                              );
+                              const outgoingRooms = uniqueOutgoingRooms.size;
+                              const outgoingGuests = outgoingBookings.length;
+
+                              // Sum: occupied + outgoing
+                              const morningRooms = occupiedRooms + outgoingRooms;
+                              const morningBeds = occupiedBeds + outgoingGuests;
+
+                              return `${morningRooms}/${morningBeds}`;
                             })()}
                           </div>
                         </div>
