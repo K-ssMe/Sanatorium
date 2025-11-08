@@ -221,8 +221,8 @@ export default function RoomGrid({
       const checkOut = new Date(booking.checkOutDate);
       checkOut.setHours(0, 0, 0, 0);
 
-      // Guest is present from check-in date until (but not including) check-out date
-      return checkIn <= today && checkOut > today;
+      // Guest is present from check-in date until check-out date (INCLUSIVE)
+      return checkIn <= today && checkOut >= today;
     });
   };
 
