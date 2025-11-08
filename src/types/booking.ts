@@ -171,7 +171,8 @@ export function computeRoomStatus(
     const checkOut = new Date(b.checkOutDate);
     checkOut.setHours(0, 0, 0, 0);
 
-    return checkDate >= checkIn && checkDate < checkOut;
+    // Guest is present from check-in date through check-out date (INCLUSIVE of checkout day)
+    return checkDate >= checkIn && checkDate <= checkOut;
   });
 
   if (occupiedBooking) {
@@ -192,8 +193,8 @@ export function computeRoomStatus(
     const checkOut = new Date(b.checkOutDate);
     checkOut.setHours(0, 0, 0, 0);
 
-    // Show as booked if the check date falls within the booking period
-    return checkDate >= checkIn && checkDate < checkOut;
+    // Show as booked if the check date falls within the booking period (INCLUSIVE of checkout day)
+    return checkDate >= checkIn && checkDate <= checkOut;
   });
 
   if (bookedBooking) {
