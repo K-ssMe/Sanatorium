@@ -588,8 +588,8 @@ export default function BookingSystem() {
         const checkOutDate = new Date(booking.checkOutDate);
         checkOutDate.setHours(0, 0, 0, 0);
 
-        // Auto-checkout if checkout date has passed
-        if (checkOutDate <= today) {
+        // Auto-checkout if checkout date has passed (day AFTER checkout)
+        if (checkOutDate < today) {
           completedBookings++;
           return {
             ...booking,
@@ -604,7 +604,7 @@ export default function BookingSystem() {
         const checkOutDate = new Date(booking.checkOutDate);
         checkOutDate.setHours(0, 0, 0, 0);
 
-        // Auto-complete if checkout date has passed (day after checkout)
+        // Auto-complete if checkout date has passed (day AFTER checkout)
         if (checkOutDate < today) {
           completedBookings++;
           return {
@@ -6160,7 +6160,6 @@ export default function BookingSystem() {
                                   const checkIn = new Date(b.checkInDate);
                                   checkIn.setHours(0, 0, 0, 0);
 
-                                  // Only count bookings that start on the selected date
                                   return (
                                     checkIn.getTime() ===
                                     normalizedReportDate.getTime()
@@ -6277,14 +6276,15 @@ export default function BookingSystem() {
                                   );
                               }
 
-                              // Count occupied rooms and beds
-                              let occupiedRooms = 0;
-                              let occupiedBeds = 0;
+                              // Calculate PREVIOUS DAY occupied (Занято предыдущего дня)
+                              const previousDay = new Date(reportDate);
+                              previousDay.setDate(previousDay.getDate() - 1);
+                              previousDay.setHours(0, 0, 0, 0);
+
+                              let previousDayOccupiedRooms = 0;
+                              let previousDayOccupiedBeds = 0;
 
                               filteredRoomsForReport.forEach((room) => {
-                                const normalizedReportDate = new Date(reportDate);
-                                normalizedReportDate.setHours(0, 0, 0, 0);
-
                                 const activeBookings = bookings.filter((b) => {
                                   if (b.roomId !== room.id) return false;
 
@@ -6297,19 +6297,19 @@ export default function BookingSystem() {
                                     (b.status === "checked_in" ||
                                       b.status === "booked" ||
                                       b.status === "confirmed") &&
-                                    checkIn < normalizedReportDate &&
-                                    checkOut >= normalizedReportDate
+                                    checkIn < previousDay &&
+                                    checkOut >= previousDay
                                   );
                                 });
 
                                 if (activeBookings.length > 0) {
-                                  occupiedRooms++;
-                                  occupiedBeds += activeBookings.length;
+                                  previousDayOccupiedRooms++;
+                                  previousDayOccupiedBeds += activeBookings.length;
                                 }
                               });
 
-                              // Calculate outgoing guests
-                              const outgoingBookings = bookings.filter((b) => {
+                              // Calculate outgoing guests on PREVIOUS DAY (Выезжает предыдущего дня)
+                              const previousDayOutgoingBookings = bookings.filter((b) => {
                                 if (
                                   !filteredRoomsForReport.some(
                                     (r) => r.id === b.roomId,
@@ -6321,19 +6321,48 @@ export default function BookingSystem() {
                                 const checkOut = new Date(b.checkOutDate);
                                 checkOut.setHours(0, 0, 0, 0);
                                 return (
-                                  checkOut.getTime() === reportDate.getTime()
+                                  checkOut.getTime() === previousDay.getTime()
                                 );
                               });
 
-                              const uniqueOutgoingRooms = new Set(
-                                outgoingBookings.map((b) => b.roomId),
+                              const uniquePreviousDayOutgoingRooms = new Set(
+                                previousDayOutgoingBookings.map((b) => b.roomId),
                               );
-                              const outgoingRooms = uniqueOutgoingRooms.size;
-                              const outgoingGuests = outgoingBookings.length;
+                              const previousDayOutgoingRooms = uniquePreviousDayOutgoingRooms.size;
+                              const previousDayOutgoingGuests = previousDayOutgoingBookings.length;
 
-                              // Sum: occupied + outgoing
-                              const morningRooms = occupiedRooms + outgoingRooms;
-                              const morningBeds = occupiedBeds + outgoingGuests;
+                              // Calculate incoming/booked guests on PREVIOUS DAY (Забронировано предыдущего дня)
+                              let previousDayBookedRooms = 0;
+                              let previousDayBookedBeds = 0;
+
+                              filteredRoomsForReport.forEach((room) => {
+                                const bookedBookings = bookings.filter((b) => {
+                                  if (b.roomId !== room.id) return false;
+                                  if (
+                                    b.status !== "booked" &&
+                                    b.status !== "confirmed"
+                                  )
+                                    return false;
+
+                                  const checkIn = new Date(b.checkInDate);
+                                  checkIn.setHours(0, 0, 0, 0);
+
+                                  return (
+                                    checkIn.getTime() === previousDay.getTime()
+                                  );
+                                });
+
+                                if (bookedBookings.length > 0) {
+                                  previousDayBookedRooms++;
+                                  previousDayBookedBeds += bookedBookings.length;
+                                }
+                              });
+
+                              // Formula: (Занято предыдущего дня) - (Выезжает предыдущего дня) + (Забронировано предыдущего дня)
+                              const morningRooms =
+                                previousDayOccupiedRooms - previousDayOutgoingRooms + previousDayBookedRooms;
+                              const morningBeds =
+                                previousDayOccupiedBeds - previousDayOutgoingGuests + previousDayBookedBeds;
 
                               return `${morningRooms}/${morningBeds}`;
                             })()}
