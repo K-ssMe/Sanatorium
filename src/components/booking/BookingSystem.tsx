@@ -19,6 +19,7 @@ import BookingDetailsDialog from "./BookingDetailsDialog";
 import GuestCard from "../guest/GuestCard";
 import OrganizationCard from "../organization/OrganizationCard";
 import BlockRoomDialog from "./BlockRoomDialog";
+import SwapGuestsDialog from "./SwapGuestsDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -235,6 +236,9 @@ export default function BookingSystem() {
   const [isNewOrganizationDialogOpen, setIsNewOrganizationDialogOpen] =
     useState(false);
   const [isBookingDetailsOpen, setIsBookingDetailsOpen] = useState(false);
+  const [isSwapGuestsDialogOpen, setIsSwapGuestsDialogOpen] = useState(false);
+  const [swapSourceRoom, setSwapSourceRoom] = useState<Room | null>(null);
+  const [swapTargetRoom, setSwapTargetRoom] = useState<Room | null>(null);
 
   // Settings dialog states
   const [isAddRoomDialogOpen, setIsAddRoomDialogOpen] = useState(false);
@@ -1166,39 +1170,29 @@ export default function BookingSystem() {
         return bCheckIn < bookingCheckOut && bCheckOut > bookingCheckIn;
       });
 
-      // If new room has guests, swap them to the old room
-      if (guestsInNewRoom.length > 0) {
-        const confirmMessage = `В номере ${newRoom.number} уже есть ${guestsInNewRoom.length} гость(я). Поменять их местами с гостем из номера ${oldRoom.number}?`;
-        
-        if (!confirm(confirmMessage)) {
-          return;
+      // Find guests in the old room (for swap dialog)
+      const guestsInOldRoom = bookings.filter((b) => {
+        if (
+          b.roomId !== oldRoom.id ||
+          b.status === "cancelled" ||
+          b.status === "completed"
+        ) {
+          return false;
         }
 
-        // Swap: move current booking to new room, move guests from new room to old room
-        setBookings((prevBookings) => {
-          const updated = prevBookings.map((b) => {
-            // Move current booking to new room
-            if (b.id === bookingId) {
-              return { ...b, roomId: newRoomId };
-            }
-            // Move guests from new room to old room
-            if (guestsInNewRoom.some((g) => g.id === b.id)) {
-              return { ...b, roomId: oldRoom.id };
-            }
-            return b;
-          });
-          localStorage.setItem("sanatorium_bookings", JSON.stringify(updated));
-          return updated;
-        });
+        const bCheckIn = new Date(b.checkInDate);
+        bCheckIn.setHours(0, 0, 0, 0);
+        const bCheckOut = new Date(b.checkOutDate);
+        bCheckOut.setHours(0, 0, 0, 0);
 
-        const guestNames = guestsInNewRoom.map((g) => g.guestName).join(", ");
-        alert(
-          `Гости успешно поменялись местами:\n` +
-          `${booking.guestName} → Номер ${newRoom.number}\n` +
-          `${guestNames} → Номер ${oldRoom.number}`,
-        );
-      } else {
-        // No guests in new room, just move the booking
+        return bCheckIn < bookingCheckOut && bCheckOut > bookingCheckIn;
+      });
+
+      // Check if there's free space in the target room
+      const freeSpaceInTarget = newRoom.capacity - guestsInNewRoom.length;
+
+      // If new room has free space, just move the booking
+      if (freeSpaceInTarget > 0) {
         setBookings((prevBookings) => {
           const updated = prevBookings.map((b) =>
             b.id === bookingId ? { ...b, roomId: newRoomId } : b,
@@ -1210,8 +1204,54 @@ export default function BookingSystem() {
         alert(
           `Гость ${booking.guestName} успешно переведен в номер ${newRoom.number}`,
         );
+      } else {
+        // No free space - open swap dialog
+        setSwapSourceRoom(oldRoom);
+        setSwapTargetRoom(newRoom);
+        setIsSwapGuestsDialogOpen(true);
       }
     }
+  };
+
+  const handleSwapGuests = (
+    sourceGuestIds: string[],
+    targetGuestIds: string[],
+  ) => {
+    if (!swapSourceRoom || !swapTargetRoom) return;
+
+    setBookings((prevBookings) => {
+      const updated = prevBookings.map((b) => {
+        // Move selected source guests to target room
+        if (sourceGuestIds.includes(b.id)) {
+          return { ...b, roomId: swapTargetRoom.id };
+        }
+        // Move selected target guests to source room
+        if (targetGuestIds.includes(b.id)) {
+          return { ...b, roomId: swapSourceRoom.id };
+        }
+        return b;
+      });
+      localStorage.setItem("sanatorium_bookings", JSON.stringify(updated));
+      return updated;
+    });
+
+    const sourceNames = bookings
+      .filter((b) => sourceGuestIds.includes(b.id))
+      .map((b) => b.guestName)
+      .join(", ");
+    const targetNames = bookings
+      .filter((b) => targetGuestIds.includes(b.id))
+      .map((b) => b.guestName)
+      .join(", ");
+
+    alert(
+      `Гости успешно поменялись местами:\n` +
+        `${sourceNames || "Никто"} → Номер ${swapTargetRoom.number}\n` +
+        `${targetNames || "Никто"} → Номер ${swapSourceRoom.number}`,
+    );
+
+    setSwapSourceRoom(null);
+    setSwapTargetRoom(null);
   };
 
   const handleSwapRooms = (room1Id: string, room2Id: string) => {
@@ -2684,7 +2724,7 @@ export default function BookingSystem() {
         </head>
         <body>
           <h1>${reportTitle}</h1>
-          <p>Дата создания: ${new Date().toLocaleDateString("ru-RU")}</p>
+          <p>Дата с��здания: ${new Date().toLocaleDateString("ru-RU")}</p>
           <table border='1' style='border-collapse: collapse; width: 100%;'>
             <thead>
               <tr>
@@ -7065,6 +7105,41 @@ export default function BookingSystem() {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Swap Guests Dialog */}
+        <SwapGuestsDialog
+          isOpen={isSwapGuestsDialogOpen}
+          onClose={() => {
+            setIsSwapGuestsDialogOpen(false);
+            setSwapSourceRoom(null);
+            setSwapTargetRoom(null);
+          }}
+          sourceRoom={swapSourceRoom!}
+          targetRoom={swapTargetRoom!}
+          sourceBookings={
+            swapSourceRoom
+              ? bookings.filter(
+                  (b) =>
+                    b.roomId === swapSourceRoom.id &&
+                    (b.status === "checked_in" ||
+                      b.status === "booked" ||
+                      b.status === "confirmed"),
+                )
+              : []
+          }
+          targetBookings={
+            swapTargetRoom
+              ? bookings.filter(
+                  (b) =>
+                    b.roomId === swapTargetRoom.id &&
+                    (b.status === "checked_in" ||
+                      b.status === "booked" ||
+                      b.status === "confirmed"),
+                )
+              : []
+          }
+          onSwap={handleSwapGuests}
+        />
       </div>
     </div>
   );
