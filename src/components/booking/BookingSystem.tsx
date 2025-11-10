@@ -145,9 +145,8 @@ export default function BookingSystem() {
   const [bookingCheckInDateFilter, setBookingCheckInDateFilter] =
     useState<Date | null>(null);
   const [bookingSortField, setBookingSortField] = useState<string | null>(null);
-  const [bookingSortDirection, setBookingSortDirection] = useState<
-    "asc" | "desc"
-  >("asc");
+  const [bookingSortDirection, setBookingSortDirection] =
+    useState<"asc" | "desc">("asc");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [roomsData, setRoomsData] = useState(() => {
@@ -1146,8 +1145,8 @@ export default function BookingSystem() {
       const bookingCheckOut = new Date(booking.checkOutDate);
       bookingCheckOut.setHours(0, 0, 0, 0);
 
-      // Count current occupancy in the new room during the booking period
-      const currentOccupancy = bookings.filter((b) => {
+      // Find guests in the new room during the booking period
+      const guestsInNewRoom = bookings.filter((b) => {
         if (
           b.roomId !== newRoomId ||
           b.id === bookingId || // Exclude the booking being transferred
@@ -1167,64 +1166,51 @@ export default function BookingSystem() {
         return bCheckIn < bookingCheckOut && bCheckOut > bookingCheckIn;
       });
 
-      // Check if this is a swap scenario (both rooms are single occupancy)
-      if (currentOccupancy.length >= newRoom.capacity) {
-        // Check if both rooms are single occupancy
-        if (
-          oldRoom.capacity === 1 &&
-          newRoom.capacity === 1 &&
-          currentOccupancy.length === 1
-        ) {
-          const targetBooking = currentOccupancy[0];
-
-          // Show confirmation dialog for swap
-          const confirmMessage = `Номер ${newRoom.number} занят гостем ${targetBooking.guestName}.\n\nВы хотите поменять гостей местами?\n\n${booking.guestName} (Номер ${oldRoom.number}) ↔ ${targetBooking.guestName} (Номер ${newRoom.number})`;
-
-          if (confirm(confirmMessage)) {
-            // Perform the swap
-            setBookings((prevBookings) => {
-              const updated = prevBookings.map((b) => {
-                if (b.id === booking.id) {
-                  return { ...b, roomId: newRoomId };
-                }
-                if (b.id === targetBooking.id) {
-                  return { ...b, roomId: oldRoom.id };
-                }
-                return b;
-              });
-              localStorage.setItem(
-                "sanatorium_bookings",
-                JSON.stringify(updated),
-              );
-              return updated;
-            });
-
-            alert(
-              `Гости успешно поменялись местами:\n${booking.guestName} → Номер ${newRoom.number}\n${targetBooking.guestName} → Номер ${oldRoom.number}`,
-            );
-          }
+      // If new room has guests, swap them to the old room
+      if (guestsInNewRoom.length > 0) {
+        const confirmMessage = `В номере ${newRoom.number} уже есть ${guestsInNewRoom.length} гость(я). Поменять их местами с гостем из номера ${oldRoom.number}?`;
+        
+        if (!confirm(confirmMessage)) {
           return;
         }
 
-        // Not a swap scenario - show error
+        // Swap: move current booking to new room, move guests from new room to old room
+        setBookings((prevBookings) => {
+          const updated = prevBookings.map((b) => {
+            // Move current booking to new room
+            if (b.id === bookingId) {
+              return { ...b, roomId: newRoomId };
+            }
+            // Move guests from new room to old room
+            if (guestsInNewRoom.some((g) => g.id === b.id)) {
+              return { ...b, roomId: oldRoom.id };
+            }
+            return b;
+          });
+          localStorage.setItem("sanatorium_bookings", JSON.stringify(updated));
+          return updated;
+        });
+
+        const guestNames = guestsInNewRoom.map((g) => g.guestName).join(", ");
         alert(
-          `Номер ${newRoom.number} полностью занят на даты бронирования (${booking.checkInDate.toLocaleDateString("ru-RU")} - ${booking.checkOutDate.toLocaleDateString("ru-RU")}). Вместимость: ${newRoom.capacity}, занято: ${currentOccupancy.length}`,
+          `Гости успешно поменялись местами:\n` +
+          `${booking.guestName} → Номер ${newRoom.number}\n` +
+          `${guestNames} → Номер ${oldRoom.number}`,
         );
-        return;
+      } else {
+        // No guests in new room, just move the booking
+        setBookings((prevBookings) => {
+          const updated = prevBookings.map((b) =>
+            b.id === bookingId ? { ...b, roomId: newRoomId } : b,
+          );
+          localStorage.setItem("sanatorium_bookings", JSON.stringify(updated));
+          return updated;
+        });
+
+        alert(
+          `Гость ${booking.guestName} успешно переведен в номер ${newRoom.number}`,
+        );
       }
-
-      // Update booking with new room
-      setBookings((prevBookings) => {
-        const updated = prevBookings.map((b) =>
-          b.id === bookingId ? { ...b, roomId: newRoomId } : b,
-        );
-        localStorage.setItem("sanatorium_bookings", JSON.stringify(updated));
-        return updated;
-      });
-
-      alert(
-        `Гость ${booking.guestName} успешно переведен в номер ${newRoom.number}. Занято мест на период бронирования: ${currentOccupancy.length + 1}/${newRoom.capacity}`,
-      );
     }
   };
 
@@ -6304,32 +6290,38 @@ export default function BookingSystem() {
 
                                 if (activeBookings.length > 0) {
                                   previousDayOccupiedRooms++;
-                                  previousDayOccupiedBeds += activeBookings.length;
+                                  previousDayOccupiedBeds +=
+                                    activeBookings.length;
                                 }
                               });
 
                               // Calculate outgoing guests on PREVIOUS DAY (Выезжает предыдущего дня)
-                              const previousDayOutgoingBookings = bookings.filter((b) => {
-                                if (
-                                  !filteredRoomsForReport.some(
-                                    (r) => r.id === b.roomId,
-                                  )
-                                ) {
-                                  return false;
-                                }
+                              const previousDayOutgoingBookings =
+                                bookings.filter((b) => {
+                                  if (
+                                    !filteredRoomsForReport.some(
+                                      (r) => r.id === b.roomId,
+                                    )
+                                  ) {
+                                    return false;
+                                  }
 
-                                const checkOut = new Date(b.checkOutDate);
-                                checkOut.setHours(0, 0, 0, 0);
-                                return (
-                                  checkOut.getTime() === previousDay.getTime()
-                                );
-                              });
+                                  const checkOut = new Date(b.checkOutDate);
+                                  checkOut.setHours(0, 0, 0, 0);
+                                  return (
+                                    checkOut.getTime() === previousDay.getTime()
+                                  );
+                                });
 
                               const uniquePreviousDayOutgoingRooms = new Set(
-                                previousDayOutgoingBookings.map((b) => b.roomId),
+                                previousDayOutgoingBookings.map(
+                                  (b) => b.roomId,
+                                ),
                               );
-                              const previousDayOutgoingRooms = uniquePreviousDayOutgoingRooms.size;
-                              const previousDayOutgoingGuests = previousDayOutgoingBookings.length;
+                              const previousDayOutgoingRooms =
+                                uniquePreviousDayOutgoingRooms.size;
+                              const previousDayOutgoingGuests =
+                                previousDayOutgoingBookings.length;
 
                               // Calculate incoming/booked guests on PREVIOUS DAY (Забронировано предыдущего дня)
                               let previousDayBookedRooms = 0;
@@ -6354,15 +6346,20 @@ export default function BookingSystem() {
 
                                 if (bookedBookings.length > 0) {
                                   previousDayBookedRooms++;
-                                  previousDayBookedBeds += bookedBookings.length;
+                                  previousDayBookedBeds +=
+                                    bookedBookings.length;
                                 }
                               });
 
                               // Formula: (Занято предыдущего дня) - (Выезжает предыдущего дня) + (Забронировано предыдущего дня)
                               const morningRooms =
-                                previousDayOccupiedRooms - previousDayOutgoingRooms + previousDayBookedRooms;
+                                previousDayOccupiedRooms -
+                                previousDayOutgoingRooms +
+                                previousDayBookedRooms;
                               const morningBeds =
-                                previousDayOccupiedBeds - previousDayOutgoingGuests + previousDayBookedBeds;
+                                previousDayOccupiedBeds -
+                                previousDayOutgoingGuests +
+                                previousDayBookedBeds;
 
                               return `${morningRooms}/${morningBeds}`;
                             })()}
