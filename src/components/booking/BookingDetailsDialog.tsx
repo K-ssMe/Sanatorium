@@ -231,14 +231,27 @@ export default function BookingDetailsDialog({
   };
 
   const handleTransferRoom = () => {
-    if (selectedGuestId && selectedNewRoom) {
-      onTransferRoom(selectedGuestId, selectedNewRoom);
+    if (!selectedNewRoom) {
+      alert("Пожалуйста, выберите номер для переселения");
+      return;
+    }
+
+    // If multiple guests in room, require selection
+    if (roomBookings.length > 1 && !selectedGuestId) {
+      alert("Пожалуйста, выберите гостя для переселения");
+      return;
+    }
+
+    // Transfer selected guest or the only guest in room
+    const bookingToTransfer = selectedGuestId 
+      ? selectedGuestId 
+      : effectiveBooking?.id;
+
+    if (bookingToTransfer) {
+      onTransferRoom(bookingToTransfer, selectedNewRoom);
       setShowTransferRoom(false);
       setSelectedNewRoom("");
-    } else if (effectiveBooking && selectedNewRoom) {
-      onTransferRoom(effectiveBooking.id, selectedNewRoom);
-      setShowTransferRoom(false);
-      setSelectedNewRoom("");
+      setSelectedGuestId("");
     }
   };
 
@@ -625,7 +638,8 @@ export default function BookingDetailsDialog({
                           : "Женский"}
                       </div>
                     </div>
-                    {(roomBooking.status === "booked" || roomBooking.status === "confirmed") && (
+                    {(roomBooking.status === "booked" ||
+                      roomBooking.status === "confirmed") && (
                       <div>
                         <span className="font-medium text-gray-600">
                           Статус:
@@ -656,7 +670,8 @@ export default function BookingDetailsDialog({
                     </div>
                   )}
 
-                  {(roomBooking.status === "booked" || roomBooking.status === "confirmed") && (
+                  {(roomBooking.status === "booked" ||
+                    roomBooking.status === "confirmed") && (
                     <div className="flex items-center gap-2">
                       <Button
                         variant="outline"
