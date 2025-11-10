@@ -1170,24 +1170,6 @@ export default function BookingSystem() {
         return bCheckIn < bookingCheckOut && bCheckOut > bookingCheckIn;
       });
 
-      // Find guests in the old room (for swap dialog)
-      const guestsInOldRoom = bookings.filter((b) => {
-        if (
-          b.roomId !== oldRoom.id ||
-          b.status === "cancelled" ||
-          b.status === "completed"
-        ) {
-          return false;
-        }
-
-        const bCheckIn = new Date(b.checkInDate);
-        bCheckIn.setHours(0, 0, 0, 0);
-        const bCheckOut = new Date(b.checkOutDate);
-        bCheckOut.setHours(0, 0, 0, 0);
-
-        return bCheckIn < bookingCheckOut && bCheckOut > bookingCheckIn;
-      });
-
       // Check if there's free space in the target room
       const freeSpaceInTarget = newRoom.capacity - guestsInNewRoom.length;
 
@@ -1206,6 +1188,48 @@ export default function BookingSystem() {
         );
       } else {
         // No free space - open swap dialog
+        // Find all active bookings in both rooms for the swap dialog
+        const sourceRoomBookings = bookings.filter((b) => {
+          if (
+            b.roomId !== oldRoom.id ||
+            b.status === "cancelled" ||
+            b.status === "completed"
+          ) {
+            return false;
+          }
+
+          const bCheckIn = new Date(b.checkInDate);
+          bCheckIn.setHours(0, 0, 0, 0);
+          const bCheckOut = new Date(b.checkOutDate);
+          bCheckOut.setHours(0, 0, 0, 0);
+
+          return bCheckIn < bookingCheckOut && bCheckOut > bookingCheckIn;
+        });
+
+        const targetRoomBookings = bookings.filter((b) => {
+          if (
+            b.roomId !== newRoomId ||
+            b.status === "cancelled" ||
+            b.status === "completed"
+          ) {
+            return false;
+          }
+
+          const bCheckIn = new Date(b.checkInDate);
+          bCheckIn.setHours(0, 0, 0, 0);
+          const bCheckOut = new Date(b.checkOutDate);
+          bCheckOut.setHours(0, 0, 0, 0);
+
+          return bCheckIn < bookingCheckOut && bCheckOut > bookingCheckIn;
+        });
+
+        console.log("Opening swap dialog:", {
+          sourceRoom: oldRoom.number,
+          targetRoom: newRoom.number,
+          sourceBookings: sourceRoomBookings.length,
+          targetBookings: targetRoomBookings.length,
+        });
+
         setSwapSourceRoom(oldRoom);
         setSwapTargetRoom(newRoom);
         setIsSwapGuestsDialogOpen(true);
@@ -1252,6 +1276,9 @@ export default function BookingSystem() {
 
     setSwapSourceRoom(null);
     setSwapTargetRoom(null);
+    
+    // Close the swap dialog
+    setIsSwapGuestsDialogOpen(false);
   };
 
   const handleSwapRooms = (room1Id: string, room2Id: string) => {
@@ -2724,7 +2751,7 @@ export default function BookingSystem() {
         </head>
         <body>
           <h1>${reportTitle}</h1>
-          <p>Дата с��здания: ${new Date().toLocaleDateString("ru-RU")}</p>
+          <p>Дата создания: ${new Date().toLocaleDateString("ru-RU")}</p>
           <table border='1' style='border-collapse: collapse; width: 100%;'>
             <thead>
               <tr>
