@@ -38,6 +38,11 @@ export default function SwapGuestsDialog({
     [],
   );
 
+  // Don't render if rooms are not provided
+  if (!sourceRoom || !targetRoom) {
+    return null;
+  }
+
   const handleToggleSourceGuest = (bookingId: string) => {
     setSelectedSourceGuests((prev) =>
       prev.includes(bookingId)
