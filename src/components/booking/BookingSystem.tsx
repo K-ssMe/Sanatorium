@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import {
   Room,
   Booking,
@@ -347,6 +347,55 @@ export default function BookingSystem() {
   });
   const [isAddRoomTypeDialogOpen, setIsAddRoomTypeDialogOpen] = useState(false);
 
+  // CRITICAL: Auto-recalculate booking statuses when currentDate changes
+  useEffect(() => {
+    const today = new Date(currentDate);
+    today.setHours(0, 0, 0, 0);
+
+    // Recalculate booking statuses based on current date
+    const updatedBookings = bookings.map((booking) => {
+      const checkOutDate = new Date(booking.checkOutDate);
+      checkOutDate.setHours(0, 0, 0, 0);
+
+      // Rule: If current date > checkout date, mark as completed
+      // If current date <= checkout date, keep as checked_in/booked
+      if (booking.status === "checked_in" || booking.status === "booked") {
+        if (today > checkOutDate) {
+          // Auto-complete if current date is AFTER checkout date
+          return {
+            ...booking,
+            status: "completed" as const,
+            actualCheckOutAt: booking.actualCheckOutAt || new Date(),
+          };
+        }
+      }
+
+      // Rule: If booking was completed but current date is <= checkout date, revert to checked_in
+      if (booking.status === "completed") {
+        if (today <= checkOutDate) {
+          // Revert to checked_in if we go back in time
+          return {
+            ...booking,
+            status: "checked_in" as const,
+            actualCheckOutAt: undefined,
+          };
+        }
+      }
+
+      return booking;
+    });
+
+    // Only update if there are changes
+    const hasChanges = updatedBookings.some(
+      (updated, index) => updated.status !== bookings[index].status
+    );
+
+    if (hasChanges) {
+      setBookings(updatedBookings);
+      localStorage.setItem("sanatorium_bookings", JSON.stringify(updatedBookings));
+    }
+  }, [currentDate]); // Run whenever currentDate changes
+
   const handleRoomClick = (room: Room, clickedDate?: Date) => {
     console.debug("[SAFE-FIX] BookingSystem.handleRoomClick called", {
       roomId: room.id,
@@ -592,12 +641,12 @@ export default function BookingSystem() {
       const todayNormalized = new Date(today);
       todayNormalized.setHours(0, 0, 0, 0);
 
-      // Rule 1: checked_in bookings - auto-checkout ONLY if checkout date has PASSED
-      // Example: checkOut = 11.11, today = 11.11 -> guest is still checked_in
-      //          checkOut = 11.11, today = 12.11 -> guest should be completed
+      // CRITICAL LOGIC:
+      // Rule 1: checked_in bookings - auto-checkout ONLY if TODAY > checkout date
+      // Example: checkOut = 10.11, today = 10.11 -> guest is still checked_in ✅
+      //          checkOut = 10.11, today = 11.11 -> guest should be completed ✅
       if (booking.status === "checked_in") {
         // Auto-checkout if today is AFTER checkout date (not on checkout date)
-        // CRITICAL: Use strict greater than (>) not greater than or equal (>=)
         if (todayNormalized > checkOutDate) {
           completedBookings++;
           return {
@@ -608,10 +657,9 @@ export default function BookingSystem() {
         }
       }
 
-      // Rule 2: booked bookings - auto-complete ONLY if checkout date has PASSED
+      // Rule 2: booked bookings - auto-complete ONLY if TODAY > checkout date
       if (booking.status === "booked") {
         // Auto-complete if today is AFTER checkout date (not on checkout date)
-        // CRITICAL: Use strict greater than (>) not greater than or equal (>=)
         if (todayNormalized > checkOutDate) {
           completedBookings++;
           return {
@@ -1738,10 +1786,10 @@ export default function BookingSystem() {
   };
 
   // Run auto checkout check periodically
-  useState(() => {
+  useEffect(() => {
     const interval = setInterval(checkAutoCheckouts, 60000); // Check every minute
     return () => clearInterval(interval);
-  });
+  }, []);
 
   // Filter rooms based on search and filters
   const filteredRooms = useMemo(() => {
