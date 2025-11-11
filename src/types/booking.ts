@@ -171,7 +171,10 @@ export function computeRoomStatus(
     const checkOut = new Date(b.checkOutDate);
     checkOut.setHours(0, 0, 0, 0);
 
-    // Guest is present from check-in date through check-out date (INCLUSIVE of checkout day)
+    // Guest is present from check-in date UP TO AND INCLUDING check-out date
+    // Example: checkIn = 26.10, checkOut = 11.11
+    // - On 11.11 (checkout day): guest is still OCCUPIED
+    // - On 12.11 (day after checkout): guest should be COMPLETED (not occupied)
     return checkDate >= checkIn && checkDate <= checkOut;
   });
 
