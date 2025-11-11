@@ -586,13 +586,18 @@ export default function BookingSystem() {
     const updatedBookings = bookings.map((booking) => {
       processedBookings++;
 
-      // Rule 1: checked_in bookings with expired checkout date -> completed
-      if (booking.status === "checked_in") {
-        const checkOutDate = new Date(booking.checkOutDate);
-        checkOutDate.setHours(0, 0, 0, 0);
+      // Normalize dates for comparison
+      const checkOutDate = new Date(booking.checkOutDate);
+      checkOutDate.setHours(0, 0, 0, 0);
+      const todayNormalized = new Date(today);
+      todayNormalized.setHours(0, 0, 0, 0);
 
-        // Auto-checkout if checkout date has passed (day AFTER checkout)
-        if (checkOutDate < today) {
+      // Rule 1: checked_in bookings - auto-checkout ONLY if checkout date has PASSED
+      // Example: checkOut = 11.11, today = 11.11 -> guest is still checked_in
+      //          checkOut = 11.11, today = 12.11 -> guest should be completed
+      if (booking.status === "checked_in") {
+        // Auto-checkout if today is AFTER checkout date (not on checkout date)
+        if (todayNormalized > checkOutDate) {
           completedBookings++;
           return {
             ...booking,
@@ -602,13 +607,10 @@ export default function BookingSystem() {
         }
       }
 
-      // Rule 2: booked bookings with expired checkout date -> completed
+      // Rule 2: booked bookings - auto-complete ONLY if checkout date has PASSED
       if (booking.status === "booked") {
-        const checkOutDate = new Date(booking.checkOutDate);
-        checkOutDate.setHours(0, 0, 0, 0);
-
-        // Auto-complete if checkout date has passed (day AFTER checkout)
-        if (checkOutDate < today) {
+        // Auto-complete if today is AFTER checkout date (not on checkout date)
+        if (todayNormalized > checkOutDate) {
           completedBookings++;
           return {
             ...booking,
