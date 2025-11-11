@@ -597,6 +597,7 @@ export default function BookingSystem() {
       //          checkOut = 11.11, today = 12.11 -> guest should be completed
       if (booking.status === "checked_in") {
         // Auto-checkout if today is AFTER checkout date (not on checkout date)
+        // CRITICAL: Use strict greater than (>) not greater than or equal (>=)
         if (todayNormalized > checkOutDate) {
           completedBookings++;
           return {
@@ -610,6 +611,7 @@ export default function BookingSystem() {
       // Rule 2: booked bookings - auto-complete ONLY if checkout date has PASSED
       if (booking.status === "booked") {
         // Auto-complete if today is AFTER checkout date (not on checkout date)
+        // CRITICAL: Use strict greater than (>) not greater than or equal (>=)
         if (todayNormalized > checkOutDate) {
           completedBookings++;
           return {
