@@ -171,10 +171,12 @@ export function computeRoomStatus(
     const checkOut = new Date(b.checkOutDate);
     checkOut.setHours(0, 0, 0, 0);
 
-    // Guest is present from check-in date UP TO AND INCLUDING check-out date
-    // Example: checkIn = 26.10, checkOut = 11.11
-    // - On 11.11 (checkout day): guest is still OCCUPIED
-    // - On 12.11 (day after checkout): guest should be COMPLETED (not occupied)
+    // CRITICAL LOGIC:
+    // - если системная дата ≤ дате выезда — статус "Заселен"
+    // - если системная дата > дате выезда — статус "Завершен"
+    // Example: checkOut = 10.11
+    // - On 10.11 (checkout day): checkDate (10.11) <= checkOut (10.11) → OCCUPIED ✅
+    // - On 11.11 (day after): checkDate (11.11) > checkOut (10.11) → NOT OCCUPIED ✅
     return checkDate >= checkIn && checkDate <= checkOut;
   });
 
