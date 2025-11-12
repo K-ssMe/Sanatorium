@@ -1173,11 +1173,33 @@ export default function BookingSystem() {
             (newCheckOutDate.getTime() - newCheckInDate.getTime()) /
               (1000 * 60 * 60 * 24),
           );
+          
+          // Normalize dates for status check
+          const today = new Date(currentDate);
+          today.setHours(0, 0, 0, 0);
+          const newCheckOut = new Date(newCheckOutDate);
+          newCheckOut.setHours(0, 0, 0, 0);
+          
+          // Determine correct status based on new dates
+          let newStatus = booking.status;
+          
+          // If booking was completed but new checkout is >= today, revert to checked_in
+          if (booking.status === "completed" && newCheckOut >= today) {
+            newStatus = "checked_in";
+          }
+          
+          // If booking is checked_in/booked but new checkout < today, mark as completed
+          if ((booking.status === "checked_in" || booking.status === "booked") && newCheckOut < today) {
+            newStatus = "completed";
+          }
+          
           return {
             ...booking,
             checkInDate: newCheckInDate,
             checkOutDate: newCheckOutDate,
             duration,
+            status: newStatus,
+            actualCheckOutAt: newStatus === "completed" ? (booking.actualCheckOutAt || new Date()) : undefined,
           };
         }
         return booking;
