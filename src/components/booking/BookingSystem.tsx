@@ -1141,7 +1141,13 @@ export default function BookingSystem() {
       setBookings((prevBookings) => {
         const updated = prevBookings.map((b) =>
           b.id === bookingId
-            ? { ...b, status: "completed", actualCheckOutAt: new Date() }
+            ? { 
+                ...b, 
+                status: "completed", 
+                actualCheckOutAt: new Date(),
+                // CRITICAL: Update checkout date to current date when checking out
+                checkOutDate: new Date(currentDate)
+              }
             : b,
         );
         localStorage.setItem("sanatorium_bookings", JSON.stringify(updated));
