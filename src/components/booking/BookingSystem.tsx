@@ -6810,6 +6810,7 @@ export default function BookingSystem() {
             }
           }}
           guests={guests}
+          rooms={roomsData}
         />
 
         <OrganizationCard
