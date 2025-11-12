@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Guest, Booking } from "@/types/booking";
+import { Guest, Booking, Room } from "@/types/booking";
 import {
   User,
   Phone,
@@ -46,6 +46,7 @@ interface GuestCardProps {
   onUpdateGuest?: (guest: Guest) => void;
   onOpenGuestCard?: (guestId: string) => void;
   guests?: Guest[];
+  rooms?: Room[];
 }
 
 export default function GuestCard({
@@ -58,6 +59,7 @@ export default function GuestCard({
   onUpdateGuest = () => {},
   onOpenGuestCard = () => {},
   guests = [],
+  rooms = [],
 }: GuestCardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editedGuest, setEditedGuest] = useState<Guest | null>(null);
@@ -67,6 +69,12 @@ export default function GuestCard({
   >([]);
 
   if (!guest) return null;
+
+  // Helper function to get room number from roomId
+  const getRoomNumber = (roomId: string): string => {
+    const room = rooms.find((r) => r.id === roomId);
+    return room ? room.number : roomId;
+  };
 
   const activeBookings = bookings.filter(
     (b) => b.status === "active" || b.status === "checked_in",
@@ -689,7 +697,7 @@ export default function GuestCard({
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
                         <span className="font-semibold">
-                          Номер {booking.roomId}
+                          Номер {getRoomNumber(booking.roomId)}
                         </span>
                         <Badge
                           variant={
@@ -825,7 +833,7 @@ export default function GuestCard({
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
                       <span className="font-semibold">
-                        Номер {booking.roomId}
+                        Номер {getRoomNumber(booking.roomId)}
                       </span>
                       <Badge
                         variant={
