@@ -146,8 +146,9 @@ export default function BookingSystem() {
   const [bookingCheckInDateFilter, setBookingCheckInDateFilter] =
     useState<Date | null>(null);
   const [bookingSortField, setBookingSortField] = useState<string | null>(null);
-  const [bookingSortDirection, setBookingSortDirection] =
-    useState<"asc" | "desc">("asc");
+  const [bookingSortDirection, setBookingSortDirection] = useState<
+    "asc" | "desc"
+  >("asc");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [roomsData, setRoomsData] = useState(() => {
@@ -350,14 +351,14 @@ export default function BookingSystem() {
   // CRITICAL: Auto-recalculate booking statuses when currentDate changes
   // Use ref to track if we're in the middle of a manual update
   const isManualUpdateRef = useRef(false);
-  
+
   useEffect(() => {
     // Skip if manual update is in progress
     if (isManualUpdateRef.current) {
       isManualUpdateRef.current = false;
       return;
     }
-    
+
     const today = new Date(currentDate);
     today.setHours(0, 0, 0, 0);
 
@@ -366,11 +367,13 @@ export default function BookingSystem() {
       const checkOutDate = new Date(booking.checkOutDate);
       checkOutDate.setHours(0, 0, 0, 0);
 
+      // CRITICAL FIX: Guests checkout AFTER their checkout date (next day)
       // Rule: If current date > checkout date, mark as completed
-      // If current date <= checkout date, keep as checked_in/booked
+      // Example: checkOut = 10.11, today = 10.11 -> guest is still checked_in ✅
+      //          checkOut = 10.11, today = 11.11 -> guest should be completed ✅
       if (booking.status === "checked_in" || booking.status === "booked") {
         if (today > checkOutDate) {
-          // Auto-complete if current date is AFTER checkout date
+          // Auto-complete if current date is AFTER checkout date (not on checkout date)
           return {
             ...booking,
             status: "completed" as const,
@@ -396,12 +399,15 @@ export default function BookingSystem() {
 
     // Only update if there are changes
     const hasChanges = updatedBookings.some(
-      (updated, index) => updated.status !== bookings[index].status
+      (updated, index) => updated.status !== bookings[index].status,
     );
 
     if (hasChanges) {
       setBookings(updatedBookings);
-      localStorage.setItem("sanatorium_bookings", JSON.stringify(updatedBookings));
+      localStorage.setItem(
+        "sanatorium_bookings",
+        JSON.stringify(updatedBookings),
+      );
     }
   }, [currentDate]); // ✅ Only depends on currentDate to prevent conflicts
 
@@ -1150,12 +1156,12 @@ export default function BookingSystem() {
       setBookings((prevBookings) => {
         const updated = prevBookings.map((b) =>
           b.id === bookingId
-            ? { 
-                ...b, 
-                status: "completed", 
+            ? {
+                ...b,
+                status: "completed",
                 actualCheckOutAt: new Date(),
                 // CRITICAL: Update checkout date to current date when checking out
-                checkOutDate: new Date(currentDate)
+                checkOutDate: new Date(currentDate),
               }
             : b,
         );
@@ -1177,13 +1183,13 @@ export default function BookingSystem() {
   ) => {
     // Set flag to prevent useEffect from interfering
     isManualUpdateRef.current = true;
-    
+
     // Normalize dates for accurate comparison
     const today = new Date(currentDate);
     today.setHours(0, 0, 0, 0);
     const newCheckOut = new Date(newCheckOutDate);
     newCheckOut.setHours(0, 0, 0, 0);
-    
+
     setBookings((prevBookings) => {
       const updated = prevBookings.map((booking) => {
         if (booking.id === bookingId) {
@@ -1191,32 +1197,38 @@ export default function BookingSystem() {
             (newCheckOutDate.getTime() - newCheckInDate.getTime()) /
               (1000 * 60 * 60 * 24),
           );
-          
+
           // Determine correct status based on new dates
           let newStatus = booking.status;
-          
+
           // If booking was completed but new checkout is >= today, revert to checked_in
           if (booking.status === "completed" && newCheckOut >= today) {
             newStatus = "checked_in";
           }
-          
+
           // If booking is checked_in/booked but new checkout < today, mark as completed
-          if ((booking.status === "checked_in" || booking.status === "booked") && newCheckOut < today) {
+          if (
+            (booking.status === "checked_in" || booking.status === "booked") &&
+            newCheckOut < today
+          ) {
             newStatus = "completed";
           }
-          
+
           return {
             ...booking,
             checkInDate: newCheckInDate,
             checkOutDate: newCheckOutDate,
             duration,
             status: newStatus,
-            actualCheckOutAt: newStatus === "completed" ? (booking.actualCheckOutAt || new Date()) : undefined,
+            actualCheckOutAt:
+              newStatus === "completed"
+                ? booking.actualCheckOutAt || new Date()
+                : undefined,
           };
         }
         return booking;
       });
-      
+
       // Save to localStorage immediately
       localStorage.setItem("sanatorium_bookings", JSON.stringify(updated));
       return updated;
@@ -1370,7 +1382,7 @@ export default function BookingSystem() {
 
     setSwapSourceRoom(null);
     setSwapTargetRoom(null);
-    
+
     // Close the swap dialog
     setIsSwapGuestsDialogOpen(false);
   };
