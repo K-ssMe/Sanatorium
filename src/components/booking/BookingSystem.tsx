@@ -348,7 +348,16 @@ export default function BookingSystem() {
   const [isAddRoomTypeDialogOpen, setIsAddRoomTypeDialogOpen] = useState(false);
 
   // CRITICAL: Auto-recalculate booking statuses when currentDate changes
+  // Use ref to track if we're in the middle of a manual update
+  const isManualUpdateRef = useRef(false);
+  
   useEffect(() => {
+    // Skip if manual update is in progress
+    if (isManualUpdateRef.current) {
+      isManualUpdateRef.current = false;
+      return;
+    }
+    
     const today = new Date(currentDate);
     today.setHours(0, 0, 0, 0);
 
@@ -394,7 +403,7 @@ export default function BookingSystem() {
       setBookings(updatedBookings);
       localStorage.setItem("sanatorium_bookings", JSON.stringify(updatedBookings));
     }
-  }, [currentDate]); // ✅ ИСПРАВЛЕНО: убрана зависимость bookings для предотвращения циклических обновлений
+  }, [currentDate]); // ✅ Only depends on currentDate to prevent conflicts
 
   const handleRoomClick = (room: Room, clickedDate?: Date) => {
     console.debug("[SAFE-FIX] BookingSystem.handleRoomClick called", {
@@ -1166,6 +1175,15 @@ export default function BookingSystem() {
     newCheckInDate: Date,
     newCheckOutDate: Date,
   ) => {
+    // Set flag to prevent useEffect from interfering
+    isManualUpdateRef.current = true;
+    
+    // Normalize dates for accurate comparison
+    const today = new Date(currentDate);
+    today.setHours(0, 0, 0, 0);
+    const newCheckOut = new Date(newCheckOutDate);
+    newCheckOut.setHours(0, 0, 0, 0);
+    
     setBookings((prevBookings) => {
       const updated = prevBookings.map((booking) => {
         if (booking.id === bookingId) {
@@ -1173,12 +1191,6 @@ export default function BookingSystem() {
             (newCheckOutDate.getTime() - newCheckInDate.getTime()) /
               (1000 * 60 * 60 * 24),
           );
-          
-          // Normalize dates for status check
-          const today = new Date(currentDate);
-          today.setHours(0, 0, 0, 0);
-          const newCheckOut = new Date(newCheckOutDate);
-          newCheckOut.setHours(0, 0, 0, 0);
           
           // Determine correct status based on new dates
           let newStatus = booking.status;
@@ -1204,6 +1216,8 @@ export default function BookingSystem() {
         }
         return booking;
       });
+      
+      // Save to localStorage immediately
       localStorage.setItem("sanatorium_bookings", JSON.stringify(updated));
       return updated;
     });
