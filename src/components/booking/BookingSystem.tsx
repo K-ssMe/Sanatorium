@@ -2362,11 +2362,13 @@ export default function BookingSystem() {
             return false;
           }
 
-          // Check booking status
+          // Check booking status - include ALL bookings that were made for this check-in date
+          // regardless of current status (including completed ones)
           if (
             b.status !== "booked" &&
             b.status !== "confirmed" &&
-            b.status !== "checked_in"
+            b.status !== "checked_in" &&
+            b.status !== "completed"
           ) {
             return false;
           }
@@ -3743,7 +3745,7 @@ export default function BookingSystem() {
                       </div>
                       {selectedRoom.blockedAt && (
                         <div className="text-xs text-red-600 mt-1">
-                          Заблокирован:{" "}
+                          Заблокировано:{" "}
                           {selectedRoom.blockedAt.toLocaleDateString("ru-RU")}
                         </div>
                       )}
@@ -6235,7 +6237,8 @@ export default function BookingSystem() {
                                   );
                               }
 
-                              // Count only bookings that start on the selected date
+                              // Count ALL bookings that were made for check-in on this date
+                              // regardless of current status (including completed)
                               let bookedRooms = 0;
                               let bookedBeds = 0;
 
@@ -6245,14 +6248,9 @@ export default function BookingSystem() {
                                 );
                                 normalizedReportDate.setHours(0, 0, 0, 0);
 
-                                // Count bookings that start exactly on the selected date
+                                // Count ALL bookings with check-in on this date
                                 const bookedBookings = bookings.filter((b) => {
                                   if (b.roomId !== room.id) return false;
-                                  if (
-                                    b.status !== "booked" &&
-                                    b.status !== "confirmed"
-                                  )
-                                    return false;
 
                                   const checkIn = new Date(b.checkInDate);
                                   checkIn.setHours(0, 0, 0, 0);
