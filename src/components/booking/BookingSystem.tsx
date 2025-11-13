@@ -348,68 +348,9 @@ export default function BookingSystem() {
   });
   const [isAddRoomTypeDialogOpen, setIsAddRoomTypeDialogOpen] = useState(false);
 
-  // CRITICAL: Auto-recalculate booking statuses when currentDate changes
-  // Use ref to track if we're in the middle of a manual update
-  const isManualUpdateRef = useRef(false);
-
-  useEffect(() => {
-    // Skip if manual update is in progress
-    if (isManualUpdateRef.current) {
-      isManualUpdateRef.current = false;
-      return;
-    }
-
-    const today = new Date(currentDate);
-    today.setHours(0, 0, 0, 0);
-
-    // Recalculate booking statuses based on current date
-    const updatedBookings = bookings.map((booking) => {
-      const checkOutDate = new Date(booking.checkOutDate);
-      checkOutDate.setHours(0, 0, 0, 0);
-
-      // CRITICAL FIX: Guests checkout AFTER their checkout date (next day)
-      // Rule: If current date > checkout date, mark as completed
-      // Example: checkOut = 10.11, today = 10.11 -> guest is still checked_in ✅
-      //          checkOut = 10.11, today = 11.11 -> guest should be completed ✅
-      if (booking.status === "checked_in" || booking.status === "booked") {
-        if (today > checkOutDate) {
-          // Auto-complete if current date is AFTER checkout date (not on checkout date)
-          return {
-            ...booking,
-            status: "completed" as const,
-            actualCheckOutAt: booking.actualCheckOutAt || new Date(),
-          };
-        }
-      }
-
-      // Rule: If booking was completed but current date is <= checkout date, revert to checked_in
-      if (booking.status === "completed") {
-        if (today <= checkOutDate) {
-          // Revert to checked_in if we go back in time
-          return {
-            ...booking,
-            status: "checked_in" as const,
-            actualCheckOutAt: undefined,
-          };
-        }
-      }
-
-      return booking;
-    });
-
-    // Only update if there are changes
-    const hasChanges = updatedBookings.some(
-      (updated, index) => updated.status !== bookings[index].status,
-    );
-
-    if (hasChanges) {
-      setBookings(updatedBookings);
-      localStorage.setItem(
-        "sanatorium_bookings",
-        JSON.stringify(updatedBookings),
-      );
-    }
-  }, [currentDate]); // ✅ Only depends on currentDate to prevent conflicts
+  // CRITICAL: Remove automatic status recalculation on currentDate change
+  // Status updates should ONLY happen during night audit or manual operations
+  // This prevents conflicts with manual booking updates
 
   const handleRoomClick = (room: Room, clickedDate?: Date) => {
     console.debug("[SAFE-FIX] BookingSystem.handleRoomClick called", {
@@ -1181,9 +1122,6 @@ export default function BookingSystem() {
     newCheckInDate: Date,
     newCheckOutDate: Date,
   ) => {
-    // Set flag to prevent useEffect from interfering
-    isManualUpdateRef.current = true;
-
     // Normalize dates for accurate comparison
     const today = new Date(currentDate);
     today.setHours(0, 0, 0, 0);
@@ -1201,8 +1139,8 @@ export default function BookingSystem() {
           // Determine correct status based on new dates
           let newStatus = booking.status;
 
-          // If booking was completed but new checkout is >= today, revert to checked_in
-          if (booking.status === "completed" && newCheckOut >= today) {
+          // If booking was completed but new checkout is > today, revert to checked_in
+          if (booking.status === "completed" && newCheckOut > today) {
             newStatus = "checked_in";
           }
 
