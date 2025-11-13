@@ -214,19 +214,23 @@ export default function BookingDetailsDialog({
 
   const handleEditStay = () => {
     if (selectedGuestId && editedBooking) {
+      // Immediately call onExtendStay without intermediate state updates
       onExtendStay(
         selectedGuestId,
         editedBooking.checkInDate,
         editedBooking.checkOutDate,
       );
       setShowEditStay(false);
+      setEditedBooking(null);
     } else if (effectiveBooking && editedBooking) {
+      // Immediately call onExtendStay without intermediate state updates
       onExtendStay(
         effectiveBooking.id,
         editedBooking.checkInDate,
         editedBooking.checkOutDate,
       );
       setShowEditStay(false);
+      setEditedBooking(null);
     }
   };
 
