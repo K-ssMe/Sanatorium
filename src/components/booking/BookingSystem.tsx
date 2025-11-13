@@ -394,7 +394,7 @@ export default function BookingSystem() {
       setBookings(updatedBookings);
       localStorage.setItem("sanatorium_bookings", JSON.stringify(updatedBookings));
     }
-  }, [currentDate, bookings]); // ✅ ИСПРАВЛЕНО: добавлен bookings в зависимости
+  }, [currentDate]); // ✅ ИСПРАВЛЕНО: убрана зависимость bookings для предотвращения циклических обновлений
 
   const handleRoomClick = (room: Room, clickedDate?: Date) => {
     console.debug("[SAFE-FIX] BookingSystem.handleRoomClick called", {
