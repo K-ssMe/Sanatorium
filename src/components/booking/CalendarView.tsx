@@ -97,12 +97,16 @@ export default function CalendarView({
     externalCurrentDate || new Date(),
   );
 
-  // Sync with external current date (from BookingSystem)
-  React.useEffect(() => {
-    if (externalCurrentDate) {
-      setCurrentDate(externalCurrentDate);
-    }
-  }, [externalCurrentDate]);
+  // CRITICAL FIX: Remove automatic sync with external currentDate
+  // This was causing automatic data updates without night audit
+  // The calendar should maintain its own date state independently
+  // Only update when explicitly changed by user or night audit
+  // React.useEffect(() => {
+  //   if (externalCurrentDate) {
+  //     setCurrentDate(externalCurrentDate);
+  //   }
+  // }, [externalCurrentDate]);
+  
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectionStart, setSelectionStart] = useState<{
     room: Room;
