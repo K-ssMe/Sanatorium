@@ -597,10 +597,10 @@ export default function BookingSystem() {
       const todayNormalized = new Date(today);
       todayNormalized.setHours(0, 0, 0, 0);
 
-      // CRITICAL LOGIC:
+      // CRITICAL LOGIC FIX:
       // Rule 1: checked_in bookings - auto-checkout ONLY if TODAY > checkout date
-      // Example: checkOut = 10.11, today = 10.11 -> guest is still checked_in ✅
-      //          checkOut = 10.11, today = 11.11 -> guest should be completed ✅
+      // Example: checkOut = 13.11, today = 13.11 -> guest is still checked_in ✅
+      //          checkOut = 13.11, today = 14.11 -> guest should be completed ✅
       if (booking.status === "checked_in") {
         // Auto-checkout if today is AFTER checkout date (not on checkout date)
         if (todayNormalized > checkOutDate) {
