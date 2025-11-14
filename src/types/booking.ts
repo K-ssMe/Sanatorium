@@ -171,14 +171,14 @@ export function computeRoomStatus(
     const checkOut = new Date(b.checkOutDate);
     checkOut.setHours(0, 0, 0, 0);
 
-    // CRITICAL LOGIC:
-    // - если системная дата < дате выезда — статус "Заселен"
-    // - если системная дата = дате выезда — статус "Заселен" (день выезда)
-    // - если системная дата > дате выезда — статус "Завершен"
-    // Example: checkOut = 10.11
-    // - On 09.11 (day before): checkDate (09.11) < checkOut (10.11) → OCCUPIED ✅
-    // - On 10.11 (checkout day): checkDate (10.11) = checkOut (10.11) → OCCUPIED ✅
-    // - On 11.11 (day after): checkDate (11.11) > checkOut (10.11) → NOT OCCUPIED ✅
+    // CRITICAL LOGIC FIX:
+    // Статус "Заселен" показывается ВКЛЮЧАЯ день выезда
+    // - если системная дата <= дате выезда — статус "Заселен" ✅
+    // - если системная дата > дате выезда — статус "Завершен" (не показываем как occupied) ✅
+    // Example: checkOut = 13.11
+    // - On 12.11 (day before): checkDate (12.11) <= checkOut (13.11) → OCCUPIED ✅
+    // - On 13.11 (checkout day): checkDate (13.11) <= checkOut (13.11) → OCCUPIED ✅
+    // - On 14.11 (day after): checkDate (14.11) > checkOut (13.11) → NOT OCCUPIED ✅
     return checkDate >= checkIn && checkDate <= checkOut;
   });
 
