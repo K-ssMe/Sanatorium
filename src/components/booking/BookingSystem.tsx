@@ -1765,24 +1765,24 @@ export default function BookingSystem() {
     setIsNewOrganizationDialogOpen(false);
   };
 
-  // Auto checkout functionality
-  const checkAutoCheckouts = () => {
-    const now = new Date();
-    const expiredBookings = bookings.filter(
-      (booking) =>
-        booking.status === "checked_in" && booking.checkOutDate <= now,
-    );
+  // Auto checkout functionality - DISABLED
+  // const checkAutoCheckouts = () => {
+  //   const now = new Date();
+  //   const expiredBookings = bookings.filter(
+  //     (booking) =>
+  //       booking.status === "checked_in" && booking.checkOutDate <= now,
+  //   );
+  //
+  //   expiredBookings.forEach((booking) => {
+  //     handleCheckOut(booking.id);
+  //   });
+  // };
 
-    expiredBookings.forEach((booking) => {
-      handleCheckOut(booking.id);
-    });
-  };
-
-  // Run auto checkout check periodically
-  useEffect(() => {
-    const interval = setInterval(checkAutoCheckouts, 60000); // Check every minute
-    return () => clearInterval(interval);
-  }, []);
+  // Run auto checkout check periodically - DISABLED
+  // useEffect(() => {
+  //   const interval = setInterval(checkAutoCheckouts, 60000); // Check every minute
+  //   return () => clearInterval(interval);
+  // }, []);
 
   // Filter rooms based on search and filters
   const filteredRooms = useMemo(() => {
