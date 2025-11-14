@@ -599,8 +599,9 @@ export default function BookingSystem() {
 
       // CRITICAL LOGIC FIX:
       // Rule 1: checked_in bookings - auto-checkout ONLY if TODAY > checkout date
-      // Example: checkOut = 13.11, today = 13.11 -> guest is still checked_in ✅
-      //          checkOut = 13.11, today = 14.11 -> guest should be completed ✅
+      // День выезда гость еще в номере, завершаем только на следующий день
+      // Example: checkOut = 14.11, today = 14.11 -> guest is still checked_in ✅
+      //          checkOut = 14.11, today = 15.11 -> guest should be completed ✅
       if (booking.status === "checked_in") {
         // Auto-checkout if today is AFTER checkout date (not on checkout date)
         if (todayNormalized > checkOutDate) {
