@@ -598,13 +598,13 @@ export default function BookingSystem() {
       todayNormalized.setHours(0, 0, 0, 0);
 
       // CRITICAL LOGIC FIX:
-      // Rule 1: checked_in bookings - auto-checkout ONLY if TODAY > checkout date
-      // День выезда гость еще в номере, завершаем только на следующий день
-      // Example: checkOut = 14.11, today = 14.11 -> guest is still checked_in ✅
-      //          checkOut = 14.11, today = 15.11 -> guest should be completed ✅
+      // Rule 1: checked_in bookings - auto-checkout ONLY if TODAY >= checkout date
+      // День выезда гость уже должен выехать, завершаем в этот же день
+      // Example: checkOut = 14.11, today = 13.11 -> guest is still checked_in ✅
+      //          checkOut = 14.11, today = 14.11 -> guest should be completed ✅
       if (booking.status === "checked_in") {
-        // Auto-checkout if today is AFTER checkout date (not on checkout date)
-        if (todayNormalized > checkOutDate) {
+        // Auto-checkout if today is ON OR AFTER checkout date
+        if (todayNormalized >= checkOutDate) {
           completedBookings++;
           return {
             ...booking,
@@ -614,10 +614,10 @@ export default function BookingSystem() {
         }
       }
 
-      // Rule 2: booked bookings - auto-complete ONLY if TODAY > checkout date
+      // Rule 2: booked bookings - auto-complete ONLY if TODAY >= checkout date
       if (booking.status === "booked") {
-        // Auto-complete if today is AFTER checkout date (not on checkout date)
-        if (todayNormalized > checkOutDate) {
+        // Auto-complete if today is ON OR AFTER checkout date
+        if (todayNormalized >= checkOutDate) {
           completedBookings++;
           return {
             ...booking,
