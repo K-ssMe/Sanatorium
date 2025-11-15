@@ -4654,41 +4654,32 @@ export default function BookingSystem() {
 
             {/* Stats and Night Audit */}
             <div className="flex items-center gap-6">
-              <div className="flex gap-4">
-                <div className="text-center">
-                  <div className="text-xl font-bold text-gray-900">
-                    {stats.total}
-                  </div>
-                  <div className="text-xs text-gray-600">
-                    Всего (1:{stats.buildingA} 2:{stats.buildingB})
-                  </div>
+              <div className="text-center">
+                <div className="text-xl font-bold text-gray-900">
+                  {stats.total}
                 </div>
-                <div className="text-center">
-                  <div className="text-xl font-bold text-green-600">
-                    {stats.available}/{stats.freeBeds}
-                  </div>
-                  <div className="text-xs text-gray-600">Свободно</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-xl font-bold text-red-600">
-                    {stats.occupied}/{stats.occupiedBeds}
-                  </div>
-                  <div className="text-xs text-gray-600">Занято</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-xl font-bold text-yellow-600">
-                    {stats.booked}/{stats.bookedBeds}
-                  </div>
-                  <div className="text-xs text-gray-600">Забронировано</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-xl font-bold text-blue-600">
-                    {stats.checkedInGuests}
-                  </div>
-                  <div className="text-xs text-gray-600">Заселено гостей</div>
+                <div className="text-xs text-gray-600">
+                  Всего (1:{stats.buildingA} 2:{stats.buildingB})
                 </div>
               </div>
-
+              <div className="text-center">
+                <div className="text-xl font-bold text-green-600">
+                  {stats.available}/{stats.freeBeds}
+                </div>
+                <div className="text-xs text-gray-600">Свободно</div>
+              </div>
+              <div className="text-center">
+                <div className="text-xl font-bold text-red-600">
+                  {stats.occupied}/{stats.occupiedBeds}
+                </div>
+                <div className="text-xs text-gray-600">Занято</div>
+              </div>
+              <div className="text-center">
+                <div className="text-xl font-bold text-yellow-600">
+                  {stats.booked}/{stats.bookedBeds}
+                </div>
+                <div className="text-xs text-gray-600">Забронировано</div>
+              </div>
               <div className="flex gap-2">
                 <Button
                   onClick={handleNightAudit}
@@ -6329,6 +6320,81 @@ export default function BookingSystem() {
                               const outgoingGuests = outgoingBookings.length;
 
                               return `${outgoingRooms}/${outgoingGuests}`;
+                            })()}
+                          </div>
+                        </div>
+                        <div className="bg-indigo-100/50 p-3 rounded">
+                          <div className="font-semibold text-indigo-900">
+                            На утро
+                          </div>
+                          <div className="text-2xl font-bold text-indigo-700">
+                            {(() => {
+                              const baseDate = new Date(reportDateFrom);
+                              baseDate.setHours(0, 0, 0, 0);
+                              const morningDate = new Date(baseDate);
+                              morningDate.setDate(baseDate.getDate() + 1);
+                              morningDate.setHours(0, 0, 0, 0);
+
+                              // Apply filters to rooms
+                              let filteredRoomsForReport = roomsData;
+                              if (reportBuilding !== "all") {
+                                filteredRoomsForReport = filteredRoomsForReport.filter(
+                                  (r) =>
+                                    r.building === reportBuilding ||
+                                    (reportBuilding === "1" &&
+                                      r.building === "A") ||
+                                    (reportBuilding === "2" &&
+                                      r.building === "B"),
+                                );
+                              }
+                              if (reportFloor !== "all") {
+                                filteredRoomsForReport = filteredRoomsForReport.filter(
+                                  (r) => r.floor.toString() === reportFloor,
+                                );
+                              }
+                              if (reportRoomType !== "all") {
+                                filteredRoomsForReport = filteredRoomsForReport.filter(
+                                  (r) => r.type === reportRoomType,
+                                );
+                              }
+
+                              // Next morning occupied (exclude checkout day)
+                              let occupiedRoomsNext = 0;
+                              let occupiedBedsNext = 0;
+                              filteredRoomsForReport.forEach((room) => {
+                                const activeOccupied = bookings.filter((b) => {
+                                  if (b.roomId !== room.id || b.status !== "checked_in") return false;
+                                  const checkIn = new Date(b.checkInDate);
+                                  checkIn.setHours(0, 0, 0, 0);
+                                  const checkOut = new Date(b.checkOutDate);
+                                  checkOut.setHours(0, 0, 0, 0);
+                                  // Occupied strictly before checkout day
+                                  return checkIn <= morningDate && checkOut > morningDate;
+                                });
+                                if (activeOccupied.length > 0) {
+                                  occupiedRoomsNext++;
+                                  occupiedBedsNext += activeOccupied.length;
+                                }
+                              });
+
+                              // Next morning arrivals (booked/confirmed check-ins on morningDate)
+                              let bookedRoomsNext = 0;
+                              let bookedBedsNext = 0;
+                              filteredRoomsForReport.forEach((room) => {
+                                const arrivals = bookings.filter((b) => {
+                                  if (b.roomId !== room.id) return false;
+                                  if (!(b.status === "booked" || b.status === "confirmed")) return false;
+                                  const checkIn = new Date(b.checkInDate);
+                                  checkIn.setHours(0, 0, 0, 0);
+                                  return checkIn.getTime() === morningDate.getTime();
+                                });
+                                if (arrivals.length > 0) {
+                                  bookedRoomsNext++;
+                                  bookedBedsNext += arrivals.length;
+                                }
+                              });
+
+                              return `${occupiedRoomsNext}/${occupiedBedsNext} - ${bookedRoomsNext}/${bookedBedsNext}`;
                             })()}
                           </div>
                         </div>
