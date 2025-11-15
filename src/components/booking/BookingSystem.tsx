@@ -146,9 +146,8 @@ export default function BookingSystem() {
   const [bookingCheckInDateFilter, setBookingCheckInDateFilter] =
     useState<Date | null>(null);
   const [bookingSortField, setBookingSortField] = useState<string | null>(null);
-  const [bookingSortDirection, setBookingSortDirection] = useState<
-    "asc" | "desc"
-  >("asc");
+  const [bookingSortDirection, setBookingSortDirection] =
+    useState<"asc" | "desc">("asc");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [roomsData, setRoomsData] = useState(() => {
@@ -6328,74 +6327,93 @@ export default function BookingSystem() {
                           </div>
                           <div className="text-2xl font-bold text-indigo-700">
                             {(() => {
-                              const baseDate = new Date(reportDateFrom);
-                              baseDate.setHours(0, 0, 0, 0);
-                              const morningDate = new Date(baseDate);
-                              morningDate.setDate(baseDate.getDate() + 1);
-                              morningDate.setHours(0, 0, 0, 0);
+                              const reportDate = new Date(reportDateFrom);
+                              reportDate.setHours(0, 0, 0, 0);
 
                               // Apply filters to rooms
                               let filteredRoomsForReport = roomsData;
                               if (reportBuilding !== "all") {
-                                filteredRoomsForReport = filteredRoomsForReport.filter(
-                                  (r) =>
-                                    r.building === reportBuilding ||
-                                    (reportBuilding === "1" &&
-                                      r.building === "A") ||
-                                    (reportBuilding === "2" &&
-                                      r.building === "B"),
-                                );
+                                filteredRoomsForReport =
+                                  filteredRoomsForReport.filter(
+                                    (r) =>
+                                      r.building === reportBuilding ||
+                                      (reportBuilding === "1" &&
+                                        r.building === "A") ||
+                                      (reportBuilding === "2" &&
+                                        r.building === "B"),
+                                  );
                               }
                               if (reportFloor !== "all") {
-                                filteredRoomsForReport = filteredRoomsForReport.filter(
-                                  (r) => r.floor.toString() === reportFloor,
-                                );
+                                filteredRoomsForReport =
+                                  filteredRoomsForReport.filter(
+                                    (r) => r.floor.toString() === reportFloor,
+                                  );
                               }
                               if (reportRoomType !== "all") {
-                                filteredRoomsForReport = filteredRoomsForReport.filter(
-                                  (r) => r.type === reportRoomType,
-                                );
+                                filteredRoomsForReport =
+                                  filteredRoomsForReport.filter(
+                                    (r) => r.type === reportRoomType,
+                                  );
                               }
 
-                              // Calculate OCCUPIED on morning date (exclude checkout day)
-                              let occupiedRoomsNext = 0;
-                              let occupiedBedsNext = 0;
+                              // Calculate OCCUPIED (Занято) - same calculation as "Занято" cell
+                              let occupiedRooms = 0;
+                              let occupiedBeds = 0;
+
                               filteredRoomsForReport.forEach((room) => {
-                                const activeOccupied = bookings.filter((b) => {
-                                  if (b.roomId !== room.id || b.status !== "checked_in") return false;
+                                const normalizedReportDate = new Date(reportDate);
+                                normalizedReportDate.setHours(0, 0, 0, 0);
+
+                                const activeBookings = bookings.filter((b) => {
+                                  if (b.roomId !== room.id) return false;
+
                                   const checkIn = new Date(b.checkInDate);
                                   checkIn.setHours(0, 0, 0, 0);
                                   const checkOut = new Date(b.checkOutDate);
                                   checkOut.setHours(0, 0, 0, 0);
-                                  // Occupied strictly before checkout day
-                                  return checkIn <= morningDate && checkOut > morningDate;
+
+                                  return (
+                                    b.status !== "cancelled" &&
+                                    checkIn <= normalizedReportDate &&
+                                    checkOut >= normalizedReportDate
+                                  );
                                 });
-                                if (activeOccupied.length > 0) {
-                                  occupiedRoomsNext++;
-                                  occupiedBedsNext += activeOccupied.length;
+
+                                if (activeBookings.length > 0) {
+                                  occupiedRooms++;
+                                  occupiedBeds += activeBookings.length;
                                 }
                               });
 
-                              // Calculate ARRIVALS on morning date (booked/confirmed check-ins)
-                              let bookedRoomsNext = 0;
-                              let bookedBedsNext = 0;
+                              // Calculate BOOKED (Забронировано) - same calculation as "Забронировано" cell
+                              let bookedRooms = 0;
+                              let bookedBeds = 0;
+
                               filteredRoomsForReport.forEach((room) => {
-                                const arrivals = bookings.filter((b) => {
+                                const normalizedReportDate = new Date(reportDate);
+                                normalizedReportDate.setHours(0, 0, 0, 0);
+
+                                const bookedBookings = bookings.filter((b) => {
                                   if (b.roomId !== room.id) return false;
-                                  if (!(b.status === "booked" || b.status === "confirmed")) return false;
+
                                   const checkIn = new Date(b.checkInDate);
                                   checkIn.setHours(0, 0, 0, 0);
-                                  return checkIn.getTime() === morningDate.getTime();
+
+                                  return (
+                                    b.status !== "cancelled" &&
+                                    checkIn.getTime() === normalizedReportDate.getTime()
+                                  );
                                 });
-                                if (arrivals.length > 0) {
-                                  bookedRoomsNext++;
-                                  bookedBedsNext += arrivals.length;
+
+                                if (bookedBookings.length > 0) {
+                                  bookedRooms++;
+                                  bookedBeds += bookedBookings.length;
                                 }
                               });
 
-                              // Formula: Occupied - Booked (rooms/beds)
-                              const resultRooms = occupiedRoomsNext - bookedRoomsNext;
-                              const resultBeds = occupiedBedsNext - bookedBedsNext;
+                              // Formula: Занято - Забронировано
+                              const resultRooms = occupiedRooms - bookedRooms;
+                              const resultBeds = occupiedBeds - bookedBeds;
 
                               return `${resultRooms}/${resultBeds}`;
                             })()}
