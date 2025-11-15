@@ -1992,8 +1992,7 @@ export default function BookingSystem() {
       const normalizedDate = new Date(date);
       normalizedDate.setHours(0, 0, 0, 0);
 
-      // Count current occupancy for this room - count actual guests (bookings)
-      // For occupied rooms, count checked_in bookings
+      // Count ACTUAL occupied beds - only checked_in guests present on this date
       const occupiedBookings = bookings.filter((b) => {
         if (b.roomId !== room.id || b.status !== "checked_in") {
           return false;
@@ -2032,7 +2031,7 @@ export default function BookingSystem() {
           break;
         case "occupied":
           occupied++;
-          // Count actual occupied places (each booking = 1 person)
+          // Count ACTUAL occupied places (each booking = 1 person)
           occupiedBeds += occupiedBookings.length;
           // Free beds = total capacity minus all guests (occupied + booked)
           freeBeds += Math.max(0, room.capacity - totalGuestsInRoom);
@@ -6358,7 +6357,7 @@ export default function BookingSystem() {
                                 );
                               }
 
-                              // Next morning occupied (exclude checkout day)
+                              // Calculate OCCUPIED on morning date (exclude checkout day)
                               let occupiedRoomsNext = 0;
                               let occupiedBedsNext = 0;
                               filteredRoomsForReport.forEach((room) => {
@@ -6377,7 +6376,7 @@ export default function BookingSystem() {
                                 }
                               });
 
-                              // Next morning arrivals (booked/confirmed check-ins on morningDate)
+                              // Calculate ARRIVALS on morning date (booked/confirmed check-ins)
                               let bookedRoomsNext = 0;
                               let bookedBedsNext = 0;
                               filteredRoomsForReport.forEach((room) => {
@@ -6394,7 +6393,11 @@ export default function BookingSystem() {
                                 }
                               });
 
-                              return `${occupiedRoomsNext}/${occupiedBedsNext} - ${bookedRoomsNext}/${bookedBedsNext}`;
+                              // Formula: Occupied - Booked (rooms/beds)
+                              const resultRooms = occupiedRoomsNext - bookedRoomsNext;
+                              const resultBeds = occupiedBedsNext - bookedBedsNext;
+
+                              return `${resultRooms}/${resultBeds}`;
                             })()}
                           </div>
                         </div>
