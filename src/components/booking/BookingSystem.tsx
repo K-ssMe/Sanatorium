@@ -6162,7 +6162,7 @@ export default function BookingSystem() {
                                   );
                               }
 
-                              // Count all occupied rooms and beds (all active bookings on selected date)
+                              // Count occupied rooms and beds including checkout day
                               let occupiedRooms = 0;
                               let occupiedBeds = 0;
 
@@ -6180,13 +6180,10 @@ export default function BookingSystem() {
                                   const checkOut = new Date(b.checkOutDate);
                                   checkOut.setHours(0, 0, 0, 0);
 
-                                  // Include all bookings (checked_in, booked, confirmed) that:
-                                  // - Started on or before the report date
-                                  // - Checkout date is ON OR AFTER report date (includes checkout day)
+                                  // Include all non-cancelled bookings that span the report date
+                                  // Include checkout day as occupied (checkOut >= date)
                                   return (
-                                    (b.status === "checked_in" ||
-                                      b.status === "booked" ||
-                                      b.status === "confirmed") &&
+                                    b.status !== "cancelled" &&
                                     checkIn <= normalizedReportDate &&
                                     checkOut >= normalizedReportDate
                                   );
@@ -6237,8 +6234,7 @@ export default function BookingSystem() {
                                   );
                               }
 
-                              // Count ALL bookings that were made for check-in on this date
-                              // regardless of current status (including completed)
+                              // Count ALL arrivals (check-ins) on this date (exclude cancelled)
                               let bookedRooms = 0;
                               let bookedBeds = 0;
 
@@ -6248,7 +6244,6 @@ export default function BookingSystem() {
                                 );
                                 normalizedReportDate.setHours(0, 0, 0, 0);
 
-                                // Count ALL bookings with check-in on this date
                                 const bookedBookings = bookings.filter((b) => {
                                   if (b.roomId !== room.id) return false;
 
@@ -6256,8 +6251,9 @@ export default function BookingSystem() {
                                   checkIn.setHours(0, 0, 0, 0);
 
                                   return (
+                                    b.status !== "cancelled" &&
                                     checkIn.getTime() ===
-                                    normalizedReportDate.getTime()
+                                      normalizedReportDate.getTime()
                                   );
                                 });
 
@@ -6306,8 +6302,7 @@ export default function BookingSystem() {
                                   );
                               }
 
-                              // Calculate outgoing guests - include ALL bookings with checkout on this date
-                              // regardless of their current status (including completed)
+                              // Calculate outgoing guests - bookings with checkout on this date (exclude cancelled)
                               const outgoingBookings = bookings.filter((b) => {
                                 if (
                                   !filteredRoomsForReport.some(
@@ -6317,7 +6312,8 @@ export default function BookingSystem() {
                                   return false;
                                 }
 
-                                // Include ALL statuses - we want to count everyone who checked out on this date
+                                if (b.status === "cancelled") return false;
+
                                 const checkOut = new Date(b.checkOutDate);
                                 checkOut.setHours(0, 0, 0, 0);
                                 return (
