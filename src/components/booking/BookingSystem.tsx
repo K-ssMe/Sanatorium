@@ -150,6 +150,9 @@ export default function BookingSystem() {
     useState<"asc" | "desc">("asc");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
+  // Add period filter state for free rooms filter
+  const [periodFrom, setPeriodFrom] = useState<string>("");
+  const [periodTo, setPeriodTo] = useState<string>("");
   const [roomsData, setRoomsData] = useState(() => {
     const saved = localStorage.getItem("sanatorium_rooms");
     if (saved) {
@@ -1804,7 +1807,53 @@ export default function BookingSystem() {
         (selectedBuilding === "1" && room.building === "A") ||
         (selectedBuilding === "2" && room.building === "B");
 
-      return matchesSearch && matchesStatus && matchesType && matchesBuilding;
+      // Period availability: show rooms that are FREE for the entire selected range
+      const hasPeriod = Boolean(periodFrom) && Boolean(periodTo);
+      let matchesPeriod = true;
+      if (hasPeriod) {
+        const start = new Date(periodFrom);
+        const end = new Date(periodTo);
+        start.setHours(0, 0, 0, 0);
+        end.setHours(0, 0, 0, 0);
+
+        // If invalid range, do not filter by period
+        if (end < start) {
+          matchesPeriod = true;
+        } else {
+          if (room.blocked) {
+            matchesPeriod = false;
+          } else {
+            const dayMs = 24 * 60 * 60 * 1000;
+            matchesPeriod = true;
+            for (let d = new Date(start.getTime()); d.getTime() <= end.getTime(); d = new Date(d.getTime() + dayMs)) {
+              const activeBookings = bookings.filter((b) => {
+                if (b.roomId !== room.id) return false;
+                if (b.status === "cancelled" || b.status === "completed") return false;
+
+                const checkIn = new Date(b.checkInDate);
+                checkIn.setHours(0, 0, 0, 0);
+                const checkOut = new Date(b.checkOutDate);
+                checkOut.setHours(0, 0, 0, 0);
+                // Include checkout day as occupied
+                return checkIn <= d && checkOut >= d;
+              });
+              // Room must be completely free (no active bookings) on each day
+              if (activeBookings.length > 0) {
+                matchesPeriod = false;
+                break;
+              }
+            }
+          }
+        }
+      }
+
+      return (
+        matchesSearch &&
+        matchesStatus &&
+        matchesType &&
+        matchesBuilding &&
+        matchesPeriod
+      );
     });
   }, [
     roomsData,
@@ -1814,6 +1863,8 @@ export default function BookingSystem() {
     selectedBuilding,
     currentDate,
     bookings,
+    periodFrom,
+    periodTo,
   ]);
 
   // Filter guests
@@ -1985,14 +2036,19 @@ export default function BookingSystem() {
 
     roomsData.forEach((room) => {
       totalBeds += room.capacity;
-      const status = computeRoomStatus(room, date, bookings);
 
       // Normalize date for accurate comparison
       const normalizedDate = new Date(date);
       normalizedDate.setHours(0, 0, 0, 0);
 
-      // Count ACTUAL occupied beds - only checked_in guests present on this date
-      const occupiedBookings = bookings.filter((b) => {
+      // BLOCKED rooms have priority
+      if (room.blocked) {
+        blocked++;
+        return;
+      }
+
+      // Count checked-in guests (actually present) for occupied beds
+      const checkedInBookings = bookings.filter((b) => {
         if (b.roomId !== room.id || b.status !== "checked_in") {
           return false;
         }
@@ -2000,11 +2056,13 @@ export default function BookingSystem() {
         checkIn.setHours(0, 0, 0, 0);
         const checkOut = new Date(b.checkOutDate);
         checkOut.setHours(0, 0, 0, 0);
-        // Guest is present from check-in date until (but not including) check-out date
-        return checkIn <= normalizedDate && checkOut > normalizedDate;
+        const normalizedDate = new Date(date);
+        normalizedDate.setHours(0, 0, 0, 0);
+        // Include checkout day: guest is considered present through the checkout date
+        return checkIn <= normalizedDate && checkOut >= normalizedDate;
       });
 
-      // For booked rooms, count booked/confirmed bookings
+      // Count booked/confirmed bookings active on date
       const bookedBookings = bookings.filter((b) => {
         if (
           b.roomId !== room.id ||
@@ -2016,35 +2074,23 @@ export default function BookingSystem() {
         checkIn.setHours(0, 0, 0, 0);
         const checkOut = new Date(b.checkOutDate);
         checkOut.setHours(0, 0, 0, 0);
-        // Booking is active from check-in date until (but not including) check-out date
+        // Booking active for the date (exclusive of checkout day to avoid double-counting)
         return checkIn <= normalizedDate && checkOut > normalizedDate;
       });
 
-      // Count total guests in this room (each booking = 1 guest)
-      const totalGuestsInRoom = occupiedBookings.length + bookedBookings.length;
+      const totalGuestsInRoom = checkedInBookings.length + bookedBookings.length;
 
-      switch (status) {
-        case "free":
-          free++;
-          freeBeds += room.capacity;
-          break;
-        case "occupied":
-          occupied++;
-          // Count ACTUAL occupied places (each booking = 1 person)
-          occupiedBeds += occupiedBookings.length;
-          // Free beds = total capacity minus all guests (occupied + booked)
-          freeBeds += Math.max(0, room.capacity - totalGuestsInRoom);
-          break;
-        case "booked":
-          booked++;
-          // Count actual booked places (each booking = 1 person)
-          bookedBeds += bookedBookings.length;
-          // Free beds = total capacity minus all guests (occupied + booked)
-          freeBeds += Math.max(0, room.capacity - totalGuestsInRoom);
-          break;
-        case "blocked":
-          blocked++;
-          break;
+      if (checkedInBookings.length > 0) {
+        occupied++;
+        occupiedBeds += checkedInBookings.length;
+        freeBeds += Math.max(0, room.capacity - totalGuestsInRoom);
+      } else if (bookedBookings.length > 0) {
+        booked++;
+        bookedBeds += bookedBookings.length;
+        freeBeds += Math.max(0, room.capacity - totalGuestsInRoom);
+      } else {
+        free++;
+        freeBeds += room.capacity;
       }
     });
 
@@ -2056,10 +2102,8 @@ export default function BookingSystem() {
       (r) => r.building === "2" || r.building === "B",
     );
 
-    // Count checked-in guests
-    const checkedInGuests = bookings.filter(
-      (b) => b.status === "checked_in",
-    ).length;
+    // Count checked-in guests (overall)
+    const checkedInGuests = bookings.filter((b) => b.status === "checked_in").length;
 
     return {
       total,
@@ -2140,10 +2184,8 @@ export default function BookingSystem() {
         checkIn.setHours(0, 0, 0, 0);
         const checkOut = new Date(b.checkOutDate);
         checkOut.setHours(0, 0, 0, 0);
-        // Guest is present from check-in date until (but not including) check-out date
-        return (
-          checkIn <= normalizedReportDate && checkOut > normalizedReportDate
-        );
+        // Guest is present from check-in date until (but NOT including) checkout day
+        return checkIn <= normalizedReportDate && checkOut > normalizedReportDate;
       });
 
       const bookedBookings = bookings.filter((b) => {
@@ -2157,10 +2199,8 @@ export default function BookingSystem() {
         checkIn.setHours(0, 0, 0, 0);
         const checkOut = new Date(b.checkOutDate);
         checkOut.setHours(0, 0, 0, 0);
-        // Booking is active from check-in date until (but not including) check-out date
-        return (
-          checkIn <= normalizedReportDate && checkOut > normalizedReportDate
-        );
+        // Booking active for the date (exclusive of checkout day to avoid double-counting)
+        return checkIn <= normalizedReportDate && checkOut > normalizedReportDate;
       });
 
       const totalGuestsInRoom = occupiedBookings.length + bookedBookings.length;
@@ -4846,6 +4886,30 @@ export default function BookingSystem() {
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                       />
+                    </div>
+
+                    {/* Period filter: free rooms for selected range */}
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Период</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Input
+                          type="date"
+                          value={periodFrom}
+                          onChange={(e) => setPeriodFrom(e.target.value)}
+                          placeholder="С"
+                        />
+                        <Input
+                          type="date"
+                          value={periodTo}
+                          onChange={(e) => setPeriodTo(e.target.value)}
+                          placeholder="По"
+                        />
+                      </div>
+                      {periodFrom && periodTo && (
+                        <div className="text-xs text-gray-500 mt-1">
+                          Показаны номера свободные на период {new Date(periodFrom).toLocaleDateString("ru-RU")} - {new Date(periodTo).toLocaleDateString("ru-RU")}
+                        </div>
+                      )}
                     </div>
 
                     {/* Status Filter */}
