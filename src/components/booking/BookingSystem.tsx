@@ -87,6 +87,12 @@ export default function BookingSystem() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
+        // Hard safety cap: if too many bookings in storage, ignore stored data
+        if (Array.isArray(parsed) && parsed.length > 2000) {
+          console.warn("sanatorium_bookings size too big, clearing corrupted storage");
+          localStorage.removeItem("sanatorium_bookings");
+          return [];
+        }
         return parsed.map((b: any) => ({
           ...b,
           checkInDate: new Date(b.checkInDate),
@@ -146,8 +152,9 @@ export default function BookingSystem() {
   const [bookingCheckInDateFilter, setBookingCheckInDateFilter] =
     useState<Date | null>(null);
   const [bookingSortField, setBookingSortField] = useState<string | null>(null);
-  const [bookingSortDirection, setBookingSortDirection] =
-    useState<"asc" | "desc">("asc");
+  const [bookingSortDirection, setBookingSortDirection] = useState<
+    "asc" | "desc"
+  >("asc");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   // Add period filter state for free rooms filter
@@ -646,10 +653,15 @@ export default function BookingSystem() {
 
     // Update bookings state
     setBookings(updatedBookings);
-    localStorage.setItem(
-      "sanatorium_bookings",
-      JSON.stringify(updatedBookings),
-    );
+    try {
+      localStorage.setItem(
+        "sanatorium_bookings",
+        JSON.stringify(updatedBookings),
+      );
+    } catch (error) {
+      console.error("Failed to save sanatorium_bookings to localStorage", error);
+      alert("Данные броней переполнены, сохранение только в памяти. Очистите данные или уменьшите количество записей.");
+    }
 
     // Create audit log entry
     const auditEntry: AuditLog = {
@@ -1004,7 +1016,12 @@ export default function BookingSystem() {
     console.debug("[SAFE-FIX] Creating new booking:", newBooking);
     setBookings((prev) => {
       const updated = [...prev, newBooking];
-      localStorage.setItem("sanatorium_bookings", JSON.stringify(updated));
+      try {
+        localStorage.setItem("sanatorium_bookings", JSON.stringify(updated));
+      } catch (error) {
+        console.error("Failed to save sanatorium_bookings to localStorage", error);
+        alert("Данные броней переполнены, сохранение только в памяти. Очистите данные или уменьшите количество записей.");
+      }
       return updated;
     });
 
@@ -1063,7 +1080,12 @@ export default function BookingSystem() {
     console.debug("[SAFE-FIX] Creating additional booking:", newBooking);
     setBookings((prev) => {
       const updated = [...prev, newBooking];
-      localStorage.setItem("sanatorium_bookings", JSON.stringify(updated));
+      try {
+        localStorage.setItem("sanatorium_bookings", JSON.stringify(updated));
+      } catch (error) {
+        console.error("Failed to save sanatorium_bookings to localStorage", error);
+        alert("Данные броней переполнены, сохранение только в памяти. Очистите данные или уменьшите количество записей.");
+      }
       return updated;
     });
   };
@@ -1073,7 +1095,12 @@ export default function BookingSystem() {
       const updated = prevBookings.map((booking) =>
         booking.id === updatedBooking.id ? updatedBooking : booking,
       );
-      localStorage.setItem("sanatorium_bookings", JSON.stringify(updated));
+      try {
+        localStorage.setItem("sanatorium_bookings", JSON.stringify(updated));
+      } catch (error) {
+        console.error("Failed to save sanatorium_bookings to localStorage", error);
+        alert("Данные броней переполнены, сохранение только в памяти. Очистите данные или уменьшите количество записей.");
+      }
       return updated;
     });
   };
@@ -1825,10 +1852,15 @@ export default function BookingSystem() {
           } else {
             const dayMs = 24 * 60 * 60 * 1000;
             matchesPeriod = true;
-            for (let d = new Date(start.getTime()); d.getTime() <= end.getTime(); d = new Date(d.getTime() + dayMs)) {
+            for (
+              let d = new Date(start.getTime());
+              d.getTime() <= end.getTime();
+              d = new Date(d.getTime() + dayMs)
+            ) {
               const activeBookings = bookings.filter((b) => {
                 if (b.roomId !== room.id) return false;
-                if (b.status === "cancelled" || b.status === "completed") return false;
+                if (b.status === "cancelled" || b.status === "completed")
+                  return false;
 
                 const checkIn = new Date(b.checkInDate);
                 checkIn.setHours(0, 0, 0, 0);
@@ -2078,7 +2110,8 @@ export default function BookingSystem() {
         return checkIn <= normalizedDate && checkOut > normalizedDate;
       });
 
-      const totalGuestsInRoom = checkedInBookings.length + bookedBookings.length;
+      const totalGuestsInRoom =
+        checkedInBookings.length + bookedBookings.length;
 
       if (checkedInBookings.length > 0) {
         occupied++;
@@ -2103,7 +2136,9 @@ export default function BookingSystem() {
     );
 
     // Count checked-in guests (overall)
-    const checkedInGuests = bookings.filter((b) => b.status === "checked_in").length;
+    const checkedInGuests = bookings.filter(
+      (b) => b.status === "checked_in",
+    ).length;
 
     return {
       total,
@@ -2185,7 +2220,9 @@ export default function BookingSystem() {
         const checkOut = new Date(b.checkOutDate);
         checkOut.setHours(0, 0, 0, 0);
         // Guest is present from check-in date until (but NOT including) checkout day
-        return checkIn <= normalizedReportDate && checkOut > normalizedReportDate;
+        return (
+          checkIn <= normalizedReportDate && checkOut > normalizedReportDate
+        );
       });
 
       const bookedBookings = bookings.filter((b) => {
@@ -2200,7 +2237,9 @@ export default function BookingSystem() {
         const checkOut = new Date(b.checkOutDate);
         checkOut.setHours(0, 0, 0, 0);
         // Booking active for the date (exclusive of checkout day to avoid double-counting)
-        return checkIn <= normalizedReportDate && checkOut > normalizedReportDate;
+        return (
+          checkIn <= normalizedReportDate && checkOut > normalizedReportDate
+        );
       });
 
       const totalGuestsInRoom = occupiedBookings.length + bookedBookings.length;
@@ -4890,7 +4929,9 @@ export default function BookingSystem() {
 
                     {/* Period filter: free rooms for selected range */}
                     <div>
-                      <label className="block text-sm font-medium mb-2">Период</label>
+                      <label className="block text-sm font-medium mb-2">
+                        Период
+                      </label>
                       <div className="grid grid-cols-2 gap-2">
                         <Input
                           type="date"
@@ -4907,7 +4948,9 @@ export default function BookingSystem() {
                       </div>
                       {periodFrom && periodTo && (
                         <div className="text-xs text-gray-500 mt-1">
-                          Показаны номера свободные на период {new Date(periodFrom).toLocaleDateString("ru-RU")} - {new Date(periodTo).toLocaleDateString("ru-RU")}
+                          Показаны номера свободные на период{" "}
+                          {new Date(periodFrom).toLocaleDateString("ru-RU")} -{" "}
+                          {new Date(periodTo).toLocaleDateString("ru-RU")}
                         </div>
                       )}
                     </div>
@@ -6425,7 +6468,9 @@ export default function BookingSystem() {
                               let occupiedBeds = 0;
 
                               filteredRoomsForReport.forEach((room) => {
-                                const normalizedReportDate = new Date(reportDate);
+                                const normalizedReportDate = new Date(
+                                  reportDate,
+                                );
                                 normalizedReportDate.setHours(0, 0, 0, 0);
 
                                 const activeBookings = bookings.filter((b) => {
@@ -6454,7 +6499,9 @@ export default function BookingSystem() {
                               let bookedBeds = 0;
 
                               filteredRoomsForReport.forEach((room) => {
-                                const normalizedReportDate = new Date(reportDate);
+                                const normalizedReportDate = new Date(
+                                  reportDate,
+                                );
                                 normalizedReportDate.setHours(0, 0, 0, 0);
 
                                 const bookedBookings = bookings.filter((b) => {
@@ -6465,7 +6512,8 @@ export default function BookingSystem() {
 
                                   return (
                                     b.status !== "cancelled" &&
-                                    checkIn.getTime() === normalizedReportDate.getTime()
+                                    checkIn.getTime() ===
+                                      normalizedReportDate.getTime()
                                   );
                                 });
 
