@@ -11,6 +11,14 @@ import {
 } from "@/types/booking";
 import { rooms } from "@/data/rooms";
 import { cn } from "@/lib/utils";
+import {
+  initDB,
+  saveToIndexedDB,
+  loadFromIndexedDB,
+  migrateFromLocalStorage,
+  checkMigrationNeeded,
+  STORES,
+} from "@/lib/db";
 import RoomGrid from "./RoomGrid";
 import CalendarView from "./CalendarView";
 
@@ -82,36 +90,8 @@ export default function BookingSystem() {
 
   const [isGuestCardOpen, setIsGuestCardOpen] = useState(false);
   const [selectedGuest, setSelectedGuest] = useState<Guest | null>(null);
-  const [bookings, setBookings] = useState<Booking[]>(() => {
-    const saved = localStorage.getItem("sanatorium_bookings");
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        // Hard safety cap: if too many bookings in storage, ignore stored data
-        if (Array.isArray(parsed) && parsed.length > 2000) {
-          console.warn("sanatorium_bookings size too big, clearing corrupted storage");
-          localStorage.removeItem("sanatorium_bookings");
-          return [];
-        }
-        return parsed.map((b: any) => ({
-          ...b,
-          checkInDate: new Date(b.checkInDate),
-          checkOutDate: new Date(b.checkOutDate),
-          createdAt: new Date(b.createdAt),
-          actualCheckInAt: b.actualCheckInAt
-            ? new Date(b.actualCheckInAt)
-            : undefined,
-          actualCheckOutAt: b.actualCheckOutAt
-            ? new Date(b.actualCheckOutAt)
-            : undefined,
-        }));
-      } catch (e) {
-        console.error("Error loading bookings:", e);
-        return [];
-      }
-    }
-    return [];
-  });
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
   const [guests, setGuests] = useState<Guest[]>(() => {
     const saved = localStorage.getItem("sanatorium_guests");
     if (saved) {
@@ -360,6 +340,117 @@ export default function BookingSystem() {
   // CRITICAL: Remove automatic status recalculation on currentDate change
   // Status updates should ONLY happen during night audit or manual operations
   // This prevents conflicts with manual booking updates
+
+  // Load data from IndexedDB on mount
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        await initDB();
+        
+        // Check if migration is needed
+        const needsMigration = await checkMigrationNeeded();
+        if (needsMigration) {
+          console.log("Migrating data from localStorage to IndexedDB...");
+          await migrateFromLocalStorage();
+        }
+
+        // Load bookings from IndexedDB
+        const savedBookings = await loadFromIndexedDB<any[]>(
+          STORES.bookings,
+          "sanatorium_bookings",
+        );
+        
+        if (savedBookings && Array.isArray(savedBookings)) {
+          const parsed = savedBookings.map((b: any) => ({
+            ...b,
+            checkInDate: new Date(b.checkInDate),
+            checkOutDate: new Date(b.checkOutDate),
+            createdAt: new Date(b.createdAt),
+            actualCheckInAt: b.actualCheckInAt ? new Date(b.actualCheckInAt) : undefined,
+            actualCheckOutAt: b.actualCheckOutAt ? new Date(b.actualCheckOutAt) : undefined,
+          }));
+          setBookings(parsed);
+          console.log(`Loaded ${parsed.length} bookings from IndexedDB`);
+        }
+
+        setIsDataLoaded(true);
+      } catch (error) {
+        console.error("Error loading data from IndexedDB:", error);
+        // Fallback to localStorage
+        try {
+          const saved = localStorage.getItem("sanatorium_bookings");
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            setBookings(
+              parsed.map((b: any) => ({
+                ...b,
+                checkInDate: new Date(b.checkInDate),
+                checkOutDate: new Date(b.checkOutDate),
+              })),
+            );
+          }
+        } catch (e) {
+          console.error("Fallback to localStorage failed:", e);
+        }
+        setIsDataLoaded(true);
+      }
+    };
+
+    loadData();
+  }, []);
+
+  const safeSaveBookingsToStorage = async (updated: Booking[]) => {
+    try {
+      // Save to IndexedDB (primary storage)
+      await saveToIndexedDB(STORES.bookings, "sanatorium_bookings", updated);
+      
+      // Also save to localStorage as backup (if it fits)
+      try {
+        localStorage.setItem("sanatorium_bookings", JSON.stringify(updated));
+      } catch (localStorageError) {
+        console.warn("localStorage full, using IndexedDB only");
+      }
+    } catch (error) {
+      console.error("Failed to save bookings:", error);
+      alert("Ошибка сохранения данных. Попробуйте еще раз.");
+    }
+  };
+
+  const handleClearOldBookings = () => {
+    const threeMonthsAgo = new Date();
+    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+
+    const oldBookings = bookings.filter(
+      (b) =>
+        b.status === "completed" &&
+        b.actualCheckOutAt &&
+        new Date(b.actualCheckOutAt) < threeMonthsAgo,
+    );
+
+    if (oldBookings.length === 0) {
+      alert("Нет старых завершенных броней для удаления (старше 3 месяцев)");
+      return;
+    }
+
+    if (
+      !confirm(
+        `Найдено ${oldBookings.length} завершенных броней старше 3 месяцев.\n\nУдалить их для освобождения памяти?\n\nТекущий размер данных: ${bookings.length} броней`,
+      )
+    ) {
+      return;
+    }
+
+    const updatedBookings = bookings.filter(
+      (b) => !oldBookings.some((old) => old.id === b.id),
+    );
+
+    setBookings(updatedBookings);
+    safeSaveBookingsToStorage(updatedBookings);
+
+    alert(
+      `Успешно удалено ${oldBookings.length} старых броней.\n\nОсталось броней: ${updatedBookings.length}`,
+    );
+  };
 
   const handleRoomClick = (room: Room, clickedDate?: Date) => {
     console.debug("[SAFE-FIX] BookingSystem.handleRoomClick called", {
@@ -653,15 +744,7 @@ export default function BookingSystem() {
 
     // Update bookings state
     setBookings(updatedBookings);
-    try {
-      localStorage.setItem(
-        "sanatorium_bookings",
-        JSON.stringify(updatedBookings),
-      );
-    } catch (error) {
-      console.error("Failed to save sanatorium_bookings to localStorage", error);
-      alert("Данные броней переполнены, сохранение только в памяти. Очистите данные или уменьшите количество записей.");
-    }
+    safeSaveBookingsToStorage(updatedBookings);
 
     // Create audit log entry
     const auditEntry: AuditLog = {
@@ -1016,12 +1099,7 @@ export default function BookingSystem() {
     console.debug("[SAFE-FIX] Creating new booking:", newBooking);
     setBookings((prev) => {
       const updated = [...prev, newBooking];
-      try {
-        localStorage.setItem("sanatorium_bookings", JSON.stringify(updated));
-      } catch (error) {
-        console.error("Failed to save sanatorium_bookings to localStorage", error);
-        alert("Данные броней переполнены, сохранение только в памяти. Очистите данные или уменьшите количество записей.");
-      }
+      safeSaveBookingsToStorage(updated);
       return updated;
     });
 
@@ -1080,12 +1158,7 @@ export default function BookingSystem() {
     console.debug("[SAFE-FIX] Creating additional booking:", newBooking);
     setBookings((prev) => {
       const updated = [...prev, newBooking];
-      try {
-        localStorage.setItem("sanatorium_bookings", JSON.stringify(updated));
-      } catch (error) {
-        console.error("Failed to save sanatorium_bookings to localStorage", error);
-        alert("Данные броней переполнены, сохранение только в памяти. Очистите данные или уменьшите количество записей.");
-      }
+      safeSaveBookingsToStorage(updated);
       return updated;
     });
   };
@@ -1095,12 +1168,7 @@ export default function BookingSystem() {
       const updated = prevBookings.map((booking) =>
         booking.id === updatedBooking.id ? updatedBooking : booking,
       );
-      try {
-        localStorage.setItem("sanatorium_bookings", JSON.stringify(updated));
-      } catch (error) {
-        console.error("Failed to save sanatorium_bookings to localStorage", error);
-        alert("Данные броней переполнены, сохранение только в памяти. Очистите данные или уменьшите количество записей.");
-      }
+      safeSaveBookingsToStorage(updated);
       return updated;
     });
   };
@@ -1116,7 +1184,7 @@ export default function BookingSystem() {
         }
         return booking;
       });
-      localStorage.setItem("sanatorium_bookings", JSON.stringify(updated));
+      safeSaveBookingsToStorage(updated);
       return updated;
     });
   };
@@ -1124,22 +1192,30 @@ export default function BookingSystem() {
   const handleCheckOut = (bookingId: string) => {
     const booking = bookings.find((b) => b.id === bookingId);
     if (booking) {
-      setBookings((prevBookings) => {
-        const updated = prevBookings.map((b) =>
-          b.id === bookingId
-            ? {
-                ...b,
-                status: "completed",
-                actualCheckOutAt: new Date(),
-                // CRITICAL: Update checkout date to current date when checking out
-                checkOutDate: new Date(currentDate),
-              }
-            : b,
-        );
-        localStorage.setItem("sanatorium_bookings", JSON.stringify(updated));
-        return updated;
-      });
-      // Note: No longer updating room status directly - it's computed dynamically
+      try {
+        setBookings((prevBookings) => {
+          const updated = prevBookings.map((b) =>
+            b.id === bookingId
+              ? {
+                  ...b,
+                  status: "completed",
+                  actualCheckOutAt: new Date(),
+                  // CRITICAL: Update checkout date to current date when checking out
+                  checkOutDate: new Date(currentDate),
+                }
+              : b,
+          );
+          safeSaveBookingsToStorage(updated);
+          return updated;
+        });
+        // Close dialog after checkout
+        setIsBookingDetailsOpen(false);
+        setSelectedBookingId(null);
+        // Note: No longer updating room status directly - it's computed dynamically
+      } catch (error) {
+        console.error("Error during checkout:", error);
+        alert("Ошибка при выселении. Попробуйте еще раз.");
+      }
     }
   };
 
@@ -1198,7 +1274,7 @@ export default function BookingSystem() {
       });
 
       // Save to localStorage immediately
-      localStorage.setItem("sanatorium_bookings", JSON.stringify(updated));
+      safeSaveBookingsToStorage(updated);
       return updated;
     });
   };
@@ -1253,7 +1329,7 @@ export default function BookingSystem() {
           const updated = prevBookings.map((b) =>
             b.id === bookingId ? { ...b, roomId: newRoomId } : b,
           );
-          localStorage.setItem("sanatorium_bookings", JSON.stringify(updated));
+          safeSaveBookingsToStorage(updated);
           return updated;
         });
 
@@ -1329,7 +1405,7 @@ export default function BookingSystem() {
         }
         return b;
       });
-      localStorage.setItem("sanatorium_bookings", JSON.stringify(updated));
+      safeSaveBookingsToStorage(updated);
       return updated;
     });
 
@@ -1413,7 +1489,7 @@ export default function BookingSystem() {
           }
           return b;
         });
-        localStorage.setItem("sanatorium_bookings", JSON.stringify(updated));
+        safeSaveBookingsToStorage(updated);
         return updated;
       });
 
@@ -1460,7 +1536,7 @@ export default function BookingSystem() {
               }
             : b,
         );
-        localStorage.setItem("sanatorium_bookings", JSON.stringify(updated));
+        safeSaveBookingsToStorage(updated);
         return updated;
       });
 
@@ -1509,7 +1585,7 @@ export default function BookingSystem() {
             }
           : booking,
       );
-      localStorage.setItem("sanatorium_bookings", JSON.stringify(updated));
+      safeSaveBookingsToStorage(updated);
       return updated;
     });
   };
@@ -5487,10 +5563,7 @@ export default function BookingSystem() {
                                     const updated = prev.filter(
                                       (b) => b.id !== selectedBookingId,
                                     );
-                                    localStorage.setItem(
-                                      "sanatorium_bookings",
-                                      JSON.stringify(updated),
-                                    );
+                                    safeSaveBookingsToStorage(updated);
                                     return updated;
                                   });
                                   setSelectedBookingId(null);
@@ -6794,6 +6867,14 @@ export default function BookingSystem() {
                       <Database className="w-4 h-4 mr-2" />
                       Проверить данные
                     </Button>
+                    <Button
+                      variant="outline"
+                      className="w-full border-blue-300 text-blue-700 hover:bg-blue-50"
+                      onClick={handleClearOldBookings}
+                    >
+                      <Database className="w-4 h-4 mr-2" />
+                      Информация о хранилище
+                    </Button>
                   </div>
                   <div className="bg-white/70 p-3 rounded-lg text-sm text-purple-700">
                     <p>
@@ -6805,6 +6886,9 @@ export default function BookingSystem() {
                     </p>
                     <p>
                       <strong>Статус:</strong> Активна
+                    </p>
+                    <p>
+                      <strong>Броней в памяти:</strong> {bookings.length}
                     </p>
                   </div>
                 </CardContent>
@@ -6912,10 +6996,7 @@ export default function BookingSystem() {
           onCancelBooking={(bookingId) => {
             setBookings((prevBookings) => {
               const updated = prevBookings.filter((b) => b.id !== bookingId);
-              localStorage.setItem(
-                "sanatorium_bookings",
-                JSON.stringify(updated),
-              );
+              safeSaveBookingsToStorage(updated);
               return updated;
             });
           }}
@@ -7079,10 +7160,7 @@ export default function BookingSystem() {
                     const updated = prev.map((r) =>
                       r.id === updatedRoom.id ? updatedRoom : r,
                     );
-                    localStorage.setItem(
-                      "sanatorium_rooms",
-                      JSON.stringify(updated),
-                    );
+                    safeSaveBookingsToStorage(updated);
                     return updated;
                   });
                 }}
@@ -7094,10 +7172,7 @@ export default function BookingSystem() {
                   ) {
                     setRoomsData((prev) => {
                       const updated = prev.filter((r) => r.id !== roomId);
-                      localStorage.setItem(
-                        "sanatorium_rooms",
-                        JSON.stringify(updated),
-                      );
+                      safeSaveBookingsToStorage(updated);
                       return updated;
                     });
                     alert("Номер успешно удален!");
@@ -7111,10 +7186,7 @@ export default function BookingSystem() {
                   };
                   setRoomsData((prev) => {
                     const updated = [...prev, roomWithId];
-                    localStorage.setItem(
-                      "sanatorium_rooms",
-                      JSON.stringify(updated),
-                    );
+                    safeSaveBookingsToStorage(updated);
                     return updated;
                   });
                   alert(`Номер ${newRoom.number} успешно добавлен!`);
