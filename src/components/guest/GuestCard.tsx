@@ -77,7 +77,7 @@ export default function GuestCard({
   };
 
   const activeBookings = bookings.filter(
-    (b) => b.status === "active" || b.status === "checked_in",
+    (b) => b.status === "booked" || b.status === "checked_in",
   );
   const completedBookings = bookings.filter((b) => b.status === "completed");
   const totalStays = completedBookings.length;
@@ -701,15 +701,15 @@ export default function GuestCard({
                         </span>
                         <Badge
                           variant={
-                            booking.status === "active" ||
+                            booking.status === "booked" ||
                             booking.status === "checked_in"
                               ? "default"
                               : "secondary"
                           }
                           className="text-xs"
                         >
-                          {booking.status === "active"
-                            ? "Активно"
+                          {booking.status === "booked"
+                            ? "Забронировано"
                             : booking.status === "checked_in"
                               ? "Заселен"
                               : booking.status === "completed"
