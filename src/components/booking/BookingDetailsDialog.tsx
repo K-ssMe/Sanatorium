@@ -679,7 +679,7 @@ export default function BookingDetailsDialog({
                     <div className="flex items-center gap-2">
                       <Button
                         variant="outline"
-                        size="xs"
+                        size="sm"
                         onClick={() => onToggleConfirmation(roomBooking.id)}
                         className={cn(
                           "flex items-center gap-1 h-7 px-2 text-xs",
