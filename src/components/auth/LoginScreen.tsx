@@ -24,7 +24,7 @@ interface LoginScreenProps {
   onLogin: (username: string, database: string) => Promise<void>;
 }
 
-export default function LoginScreen({ onLogin = () => {} }: LoginScreenProps) {
+export default function LoginScreen({ onLogin }: LoginScreenProps) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [selectedDatabase, setSelectedDatabase] = useState("");
