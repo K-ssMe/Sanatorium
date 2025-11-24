@@ -1301,7 +1301,7 @@ export default function BookingSystem() {
       const updated = prevBookings.map((booking) => {
         if (booking.id === bookingId) {
           // Toggle between "booked" and "confirmed"
-          const newStatus =
+          const newStatus: Booking["status"] =
             booking.status === "confirmed" ? "booked" : "confirmed";
           return { ...booking, status: newStatus };
         }
@@ -1321,7 +1321,7 @@ export default function BookingSystem() {
             b.id === bookingId
               ? {
                   ...b,
-                  status: "completed",
+                  status: "completed" as const,
                   actualCheckOutAt: new Date(),
                   // CRITICAL: Update checkout date to current date when checking out
                   checkOutDate: new Date(currentDate),
@@ -1654,7 +1654,7 @@ export default function BookingSystem() {
           b.id === bookingId
             ? {
                 ...b,
-                status: "checked_in",
+                status: "checked_in" as const,
                 actualCheckInAt: new Date(),
                 isConfirmed: false,
               }
