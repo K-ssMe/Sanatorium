@@ -4,6 +4,7 @@ export interface Room {
   type:
     | "double"
     | "double_improved"
+    | "double_with_balcony"
     | "single"
     | "family"
     | "luxury_double"
@@ -19,6 +20,7 @@ export interface Room {
   blockedAt?: Date;
   amenities?: string[];
   pricePerNight?: number;
+  status?: "available" | "occupied" | "maintenance" | "reserved";
 }
 
 export interface Booking {
@@ -45,6 +47,8 @@ export interface Booking {
   secondGuestName?: string;
   secondGuestGender?: "male" | "female";
   isConfirmed?: boolean;
+  isHalfDay?: boolean;
+  halfDayType?: "morning" | "evening";
   createdAt: Date;
 }
 
@@ -109,6 +113,11 @@ export interface FolioService {
   unitPrice: number;
   totalPrice: number;
   date: Date;
+  name?: string;
+  description?: string;
+  price?: number;
+  category?: "medical" | "spa" | "dining" | "entertainment" | "transport" | "other";
+  duration?: number;
 }
 
 export interface BookingOperation {
