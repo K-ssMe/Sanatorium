@@ -11,14 +11,7 @@ import {
 } from "@/types/booking";
 import { rooms } from "@/data/rooms";
 import { cn } from "@/lib/utils";
-import {
-  initDB,
-  saveToIndexedDB,
-  loadFromIndexedDB,
-  migrateFromLocalStorage,
-  checkMigrationNeeded,
-  STORES,
-} from "@/lib/db";
+import { StorageManager } from "@/lib/storage";
 import RoomGrid from "./RoomGrid";
 import CalendarView from "./CalendarView";
 
@@ -345,53 +338,183 @@ export default function BookingSystem() {
   useEffect(() => {
     const loadData = async () => {
       try {
-        await initDB();
-        
-        // Check if migration is needed
-        const needsMigration = await checkMigrationNeeded();
-        if (needsMigration) {
-          console.log("Migrating data from localStorage to IndexedDB...");
-          await migrateFromLocalStorage();
-        }
+        // Initialize StorageManager (includes migration)
+        await StorageManager.initialize();
 
-        // Load bookings from IndexedDB
-        const savedBookings = await loadFromIndexedDB<any[]>(
-          STORES.bookings,
-          "sanatorium_bookings",
-        );
-        
-        if (savedBookings && Array.isArray(savedBookings)) {
-          const parsed = savedBookings.map((b: any) => ({
+        // Load all data from IndexedDB
+        const [
+          loadedBookings,
+          loadedGuests,
+          loadedOrganizations,
+          loadedRooms,
+          loadedCurrentDate,
+          loadedAuditHistory,
+          loadedAuditLogs,
+          loadedRoomTypes,
+        ] = await Promise.all([
+          StorageManager.getBookings(),
+          StorageManager.getGuests(),
+          StorageManager.getOrganizations(),
+          StorageManager.getRooms(),
+          StorageManager.getCurrentDate(),
+          StorageManager.getAuditHistory(),
+          StorageManager.getAuditLogs(),
+          StorageManager.getRoomTypes(),
+        ]);
+
+        // Parse dates for bookings
+        const parsedBookings = loadedBookings.map((b: any) => ({
+          ...b,
+          checkInDate: new Date(b.checkInDate),
+          checkOutDate: new Date(b.checkOutDate),
+          createdAt: new Date(b.createdAt),
+          actualCheckInAt: b.actualCheckInAt
+            ? new Date(b.actualCheckInAt)
+            : undefined,
+          actualCheckOutAt: b.actualCheckOutAt
+            ? new Date(b.actualCheckOutAt)
+            : undefined,
+        }));
+
+        // Parse dates for guests
+        const parsedGuests = loadedGuests.map((g: any) => ({
+          ...g,
+          dateOfBirth: g.dateOfBirth ? new Date(g.dateOfBirth) : undefined,
+          createdAt: new Date(g.createdAt),
+        }));
+
+        // Parse dates for organizations
+        const parsedOrganizations = loadedOrganizations.map((o: any) => ({
+          ...o,
+          createdAt: new Date(o.createdAt),
+        }));
+
+        // Parse dates for rooms
+        const parsedRooms =
+          loadedRooms.length > 0
+            ? loadedRooms.map((r: any) => ({
+                ...r,
+                blockedAt: r.blockedAt ? new Date(r.blockedAt) : undefined,
+              }))
+            : rooms; // Fallback to default rooms
+
+        // Parse dates for audit history
+        const parsedAuditHistory = loadedAuditHistory.map((audit: any) => ({
+          ...audit,
+          date: new Date(audit.date),
+          bookings: audit.bookings.map((b: any) => ({
             ...b,
             checkInDate: new Date(b.checkInDate),
             checkOutDate: new Date(b.checkOutDate),
             createdAt: new Date(b.createdAt),
-            actualCheckInAt: b.actualCheckInAt ? new Date(b.actualCheckInAt) : undefined,
-            actualCheckOutAt: b.actualCheckOutAt ? new Date(b.actualCheckOutAt) : undefined,
-          }));
-          setBookings(parsed);
-          console.log(`Loaded ${parsed.length} bookings from IndexedDB`);
+            actualCheckInAt: b.actualCheckInAt
+              ? new Date(b.actualCheckInAt)
+              : undefined,
+            actualCheckOutAt: b.actualCheckOutAt
+              ? new Date(b.actualCheckOutAt)
+              : undefined,
+          })),
+          rooms: audit.rooms.map((r: any) => ({
+            ...r,
+            blockedAt: r.blockedAt ? new Date(r.blockedAt) : undefined,
+          })),
+        }));
+
+        // Parse dates for audit logs
+        const parsedAuditLogs = loadedAuditLogs.map((log: any) => ({
+          ...log,
+          dateRun: new Date(log.dateRun),
+          createdAt: new Date(log.createdAt),
+        }));
+
+        // Parse dates for room types
+        const parsedRoomTypes =
+          loadedRoomTypes.length > 0
+            ? loadedRoomTypes.map((rt: any) => ({
+                ...rt,
+                createdAt: new Date(rt.createdAt),
+              }))
+            : [
+                // Default room types
+                {
+                  id: "single",
+                  name: "single",
+                  displayName: "1 Местный стд.",
+                  capacity: 1,
+                  createdAt: new Date(),
+                },
+                {
+                  id: "single_improved",
+                  name: "single_improved",
+                  displayName: "1 Местный ул. 1 кат. (душ)",
+                  capacity: 1,
+                  createdAt: new Date(),
+                },
+                {
+                  id: "double",
+                  name: "double",
+                  displayName: "2х Местный",
+                  capacity: 2,
+                  createdAt: new Date(),
+                },
+                {
+                  id: "double_improved",
+                  name: "double_improved",
+                  displayName: "2х Местный ул. 1 кат. (душ)",
+                  capacity: 2,
+                  createdAt: new Date(),
+                },
+                {
+                  id: "family",
+                  name: "family",
+                  displayName: "Семейный",
+                  capacity: 3,
+                  createdAt: new Date(),
+                },
+                {
+                  id: "family_improved",
+                  name: "family_improved",
+                  displayName: "Семейный ул. 1 кат. (душ)",
+                  capacity: 3,
+                  createdAt: new Date(),
+                },
+                {
+                  id: "luxury_double",
+                  name: "luxury_double",
+                  displayName: "Люкс 2 Местный",
+                  capacity: 2,
+                  createdAt: new Date(),
+                },
+                {
+                  id: "luxury",
+                  name: "luxury",
+                  displayName: "Люкс",
+                  capacity: 4,
+                  createdAt: new Date(),
+                },
+              ];
+
+        // Set all state
+        setBookings(parsedBookings);
+        setGuests(parsedGuests);
+        setOrganizations(parsedOrganizations);
+        setRoomsData(parsedRooms);
+        setCurrentDate(loadedCurrentDate);
+        setAuditHistory(parsedAuditHistory);
+        setAuditLogs(parsedAuditLogs);
+        setRoomTypes(parsedRoomTypes);
+
+        // Save default room types if they were just created
+        if (loadedRoomTypes.length === 0) {
+          await StorageManager.saveRoomTypes(parsedRoomTypes);
         }
 
         setIsDataLoaded(true);
+        console.log(
+          `✅ Loaded data: ${parsedBookings.length} bookings, ${parsedGuests.length} guests, ${parsedRooms.length} rooms`,
+        );
       } catch (error) {
-        console.error("Error loading data from IndexedDB:", error);
-        // Fallback to localStorage
-        try {
-          const saved = localStorage.getItem("sanatorium_bookings");
-          if (saved) {
-            const parsed = JSON.parse(saved);
-            setBookings(
-              parsed.map((b: any) => ({
-                ...b,
-                checkInDate: new Date(b.checkInDate),
-                checkOutDate: new Date(b.checkOutDate),
-              })),
-            );
-          }
-        } catch (e) {
-          console.error("Fallback to localStorage failed:", e);
-        }
+        console.error("❌ Error loading data from IndexedDB:", error);
         setIsDataLoaded(true);
       }
     };
@@ -401,17 +524,10 @@ export default function BookingSystem() {
 
   const safeSaveBookingsToStorage = async (updated: Booking[]) => {
     try {
-      // Save to IndexedDB (primary storage)
-      await saveToIndexedDB(STORES.bookings, "sanatorium_bookings", updated);
-      
-      // Also save to localStorage as backup (if it fits)
-      try {
-        localStorage.setItem("sanatorium_bookings", JSON.stringify(updated));
-      } catch (localStorageError) {
-        console.warn("localStorage full, using IndexedDB only");
-      }
+      await StorageManager.saveBookings(updated);
+      console.log(`💾 Saved ${updated.length} bookings to IndexedDB`);
     } catch (error) {
-      console.error("Failed to save bookings:", error);
+      console.error("❌ Failed to save bookings:", error);
       alert("Ошибка сохранения данных. Попробуйте еще раз.");
     }
   };
@@ -640,6 +756,7 @@ export default function BookingSystem() {
           : room,
       );
       localStorage.setItem("sanatorium_rooms", JSON.stringify(updated));
+      StorageManager.saveRooms(updated).catch(console.error);
       return updated;
     });
   };
@@ -660,6 +777,7 @@ export default function BookingSystem() {
           : room,
       );
       localStorage.setItem("sanatorium_rooms", JSON.stringify(updated));
+      StorageManager.saveRooms(updated).catch(console.error);
       return updated;
     });
   };
@@ -684,6 +802,7 @@ export default function BookingSystem() {
         },
       ];
       localStorage.setItem("sanatorium_auditHistory", JSON.stringify(updated));
+      StorageManager.saveAuditHistory(updated).catch(console.error);
       return updated;
     });
 
@@ -758,12 +877,14 @@ export default function BookingSystem() {
     setAuditLogs((prev) => {
       const updated = [auditEntry, ...prev];
       localStorage.setItem("sanatorium_auditLogs", JSON.stringify(updated));
+      StorageManager.saveAuditLogs(updated).catch(console.error);
       return updated;
     });
 
     // Move to next day - this will trigger re-render of calendar
     setCurrentDate(nextDay);
     localStorage.setItem("sanatorium_currentDate", nextDay.toISOString());
+    StorageManager.saveCurrentDate(nextDay).catch(console.error);
 
     // Generate night audit report
     let totalBeds = 0;
@@ -1053,6 +1174,7 @@ export default function BookingSystem() {
             g.id === existingGuest.id ? updatedGuest : g,
           );
           localStorage.setItem("sanatorium_guests", JSON.stringify(updated));
+          StorageManager.saveGuests(updated).catch(console.error);
           return updated;
         });
       }
@@ -1085,6 +1207,7 @@ export default function BookingSystem() {
       setGuests((prev) => {
         const updated = [...prev, newGuest];
         localStorage.setItem("sanatorium_guests", JSON.stringify(updated));
+        StorageManager.saveGuests(updated).catch(console.error);
         return updated;
       });
     }
@@ -1393,6 +1516,16 @@ export default function BookingSystem() {
   ) => {
     if (!swapSourceRoom || !swapTargetRoom) return;
 
+    // Get guest names BEFORE updating bookings
+    const sourceNames = bookings
+      .filter((b) => sourceGuestIds.includes(b.id))
+      .map((b) => b.guestName)
+      .join(", ");
+    const targetNames = bookings
+      .filter((b) => targetGuestIds.includes(b.id))
+      .map((b) => b.guestName)
+      .join(", ");
+
     setBookings((prevBookings) => {
       const updated = prevBookings.map((b) => {
         // Move selected source guests to target room
@@ -1408,15 +1541,6 @@ export default function BookingSystem() {
       safeSaveBookingsToStorage(updated);
       return updated;
     });
-
-    const sourceNames = bookings
-      .filter((b) => sourceGuestIds.includes(b.id))
-      .map((b) => b.guestName)
-      .join(", ");
-    const targetNames = bookings
-      .filter((b) => targetGuestIds.includes(b.id))
-      .map((b) => b.guestName)
-      .join(", ");
 
     alert(
       `Гости успешно поменялись местами:\n` +
@@ -3094,6 +3218,7 @@ export default function BookingSystem() {
       const updated = [...roomsData, newRoom];
       setRoomsData(updated);
       localStorage.setItem("sanatorium_rooms", JSON.stringify(updated));
+      StorageManager.saveRooms(updated).catch(console.error);
       alert(`Номер ${formData.number} успешно добавлен!`);
       onClose();
     };
