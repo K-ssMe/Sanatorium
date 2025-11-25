@@ -1301,7 +1301,7 @@ export default function BookingSystem() {
       const updated = prevBookings.map((booking) => {
         if (booking.id === bookingId) {
           // Toggle between "booked" and "confirmed"
-          const newStatus =
+          const newStatus: Booking["status"] =
             booking.status === "confirmed" ? "booked" : "confirmed";
           return { ...booking, status: newStatus };
         }
@@ -1321,7 +1321,7 @@ export default function BookingSystem() {
             b.id === bookingId
               ? {
                   ...b,
-                  status: "completed",
+                  status: "completed" as const,
                   actualCheckOutAt: new Date(),
                   // CRITICAL: Update checkout date to current date when checking out
                   checkOutDate: new Date(currentDate),
@@ -1516,6 +1516,16 @@ export default function BookingSystem() {
   ) => {
     if (!swapSourceRoom || !swapTargetRoom) return;
 
+    // Get guest names BEFORE updating bookings
+    const sourceNames = bookings
+      .filter((b) => sourceGuestIds.includes(b.id))
+      .map((b) => b.guestName)
+      .join(", ");
+    const targetNames = bookings
+      .filter((b) => targetGuestIds.includes(b.id))
+      .map((b) => b.guestName)
+      .join(", ");
+
     setBookings((prevBookings) => {
       const updated = prevBookings.map((b) => {
         // Move selected source guests to target room
@@ -1531,15 +1541,6 @@ export default function BookingSystem() {
       safeSaveBookingsToStorage(updated);
       return updated;
     });
-
-    const sourceNames = bookings
-      .filter((b) => sourceGuestIds.includes(b.id))
-      .map((b) => b.guestName)
-      .join(", ");
-    const targetNames = bookings
-      .filter((b) => targetGuestIds.includes(b.id))
-      .map((b) => b.guestName)
-      .join(", ");
 
     alert(
       `Гости успешно поменялись местами:\n` +
@@ -1653,7 +1654,7 @@ export default function BookingSystem() {
           b.id === bookingId
             ? {
                 ...b,
-                status: "checked_in",
+                status: "checked_in" as const,
                 actualCheckInAt: new Date(),
                 isConfirmed: false,
               }
